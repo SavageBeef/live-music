@@ -1,0 +1,12 @@
+# Dependency Directories
+node_modules/
+dist/
+.env
+
+# Local Databases & Secrets
+backend/data/*.db
+*.log
+
+# OS System Files
+.DS_Store
+Thumbs.db
