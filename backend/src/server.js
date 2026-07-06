@@ -69,5 +69,29 @@ app.post('/api/pos/sell', (req, res) => {
     );
 });
 
+// Restock endpoint for staff back-office management
+app.post('/api/pos/restock', (req, res) => {
+  const { id, quantity } = req.body;
+
+  if (!id || !quantity || quantity <= 0) {
+    return res.status(400).json({ error: "Valid product ID and increment quantity are required." });
+  }
+
+  // Find the current stock first, then increment it
+  db.get('SELECT stock, name FROM products WHERE id = ?', [id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: "Product not found." });
+
+    const newStock = row.stock + parseInt(quantity, 10);
+
+    db.run('UPDATE products SET stock = ? WHERE id = ?', [newStock, id], function(updateErr) {
+      if (updateErr) return res.status(500).json({ error: updateErr.message });
+      
+      console.log(`📦 RESTOCK: ${row.name} stock increased to ${newStock}`);
+      res.json({ id, name: row.name, updatedStock: newStock });
+    });
+  });
+});
+
 const PORT = 5000;
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));

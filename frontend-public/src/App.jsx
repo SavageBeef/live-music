@@ -22,7 +22,7 @@ function App() {
         return res.json();
       })
       .then(data => {
-        if (isMounted) {
+        if (isMounted.current) {
           setProducts(data);
           setLoading(false); // Connection successful, turn off loader!
           setErrorStatus(null);
@@ -30,7 +30,7 @@ function App() {
       })
       .catch(err => {
         console.warn("Backend server not found yet. Retrying in 3 seconds...");
-        if (isMounted) {
+        if (isMounted.current) {
           setErrorStatus(err.message === "Failed to fetch" 
             ? "ERR_CONNECTION_REFUSED (Backend server is offline)" 
             : err.message
@@ -41,13 +41,23 @@ function App() {
       });
   };
 
+  // Initial mount listener fires the connection once and establishes an auto-sync heartbeat
   useEffect(() => {
-    let isMounted = true;
+    isMounted.current = true;
     connectToBackend();
+    
+    // HEARTBEAT SYNC: Re-query database every 10 seconds to catch staff inventory restocks automatically!
+    const inventorySyncHeartbeat = setInterval(() => {
+      if (isMounted.current) {
+        console.log("🔄 Background Sync: Refreshing showroom inventory tables...");
+        connectToBackend();
+      }
+    }, 10000); // 10,000 milliseconds = 10 seconds
 
-    // Clean up to prevent memory leaks if component unmounts mid-handshake
+    // Clean up hook flags and intervals when client disconnects to prevent background processing memory leaks
     return () => {
-      isMounted = false;
+      isMounted.current = false;
+      clearInterval(inventorySyncHeartbeat); // Safely clear the timer loop!
     };
   }, []);
 

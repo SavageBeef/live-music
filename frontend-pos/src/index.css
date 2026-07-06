@@ -1,0 +1,53 @@
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Let the browser window breathe naturally */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100vh;
+  overflow-x: hidden; /* Stops ugly horizontal scrollbars on multi-monitors */
+}
+
+/* Ensure the React entry point takes up full width */
+#root {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Clean up standard element margins */
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+/* Typography helpers */
+.fw-black { font-weight: 900; }
+.fw-extrabold { font-weight: 800; }
+.tracking-wider { letter-spacing: 0.1em; }
+.tracking-tight { letter-spacing: -0.03em; }
+
+/* Custom interactive button color blending */
+.btn-warning {
+  background-color: #ffc107 !important;
+  border: none !important;
+}
+.btn-warning:hover {
+  background-color: #e0a800 !important;
+  transform: scale(1.02);
+}
+
+/* Utility for micro font rendering inside table sheets */
+.fs-7 {
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+}
