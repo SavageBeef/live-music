@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ProductCard from './components/ProductCard';
 
 // Import your local asset safely via Vite
@@ -6,40 +6,43 @@ import heroBgImage from './assets/katarina-bubenikova-nUd7uq3i0qs-unsplash.jpg';
 
 function App() {
   const [products, setProducts] = useState([]);
+  const [cart, setCart] = useState([]); // Client-side shopping basket
   const [loading, setLoading] = useState(true);
   // Create a state to store the network error message/status
   const [errorStatus, setErrorStatus] = useState("Connecting...");
 
+  // Tracks the component lifespan across re-renders to prevent background thread state memory leaks
+  const isMounted = useRef(true);
+
+  // Recursive fetching function that handles failures elegantly
+  const connectToBackend = () => {
+    fetch('http://localhost:5000/api/products')
+      .then(res => {
+        if (!res.ok) throw new Error("Server responded with an error status: ${res.status}");
+        return res.json();
+      })
+      .then(data => {
+        if (isMounted) {
+          setProducts(data);
+          setLoading(false); // Connection successful, turn off loader!
+          setErrorStatus(null);
+        }
+      })
+      .catch(err => {
+        console.warn("Backend server not found yet. Retrying in 3 seconds...");
+        if (isMounted) {
+          setErrorStatus(err.message === "Failed to fetch" 
+            ? "ERR_CONNECTION_REFUSED (Backend server is offline)" 
+            : err.message
+          );
+          // Wait 3 seconds, then try to connect again
+          setTimeout(connectToBackend, 3000);
+        }
+      });
+  };
+
   useEffect(() => {
     let isMounted = true;
-
-    // Recursive fetching function that handles failures elegantly
-    const connectToBackend = () => {
-      fetch('http://localhost:5000/api/products')
-        .then(res => {
-          if (!res.ok) throw new Error("Server responded with an error status: ${res.status}");
-          return res.json();
-        })
-        .then(data => {
-          if (isMounted) {
-            setProducts(data);
-            setLoading(false); // Connection successful, turn off loader!
-            setErrorStatus(null);
-          }
-        })
-        .catch(err => {
-          console.warn("Backend server not found yet. Retrying in 3 seconds...");
-          if (isMounted) {
-            setErrorStatus(err.message === "Failed to fetch" 
-              ? "ERR_CONNECTION_REFUSED (Backend server is offline)" 
-              : err.message
-            );
-            // Wait 3 seconds, then try to connect again
-            setTimeout(connectToBackend, 3000);
-          }
-        });
-    };
-
     connectToBackend();
 
     // Clean up to prevent memory leaks if component unmounts mid-handshake
@@ -47,6 +50,54 @@ function App() {
       isMounted = false;
     };
   }, []);
+
+  // Simulates adding items to a local checkout batch session
+  const handleAddToCart = (selectedProduct) => {
+    // 1. Prevent adding if frontend reflects no temporary stock remaining
+    if (selectedProduct.stock <= 0) return;
+
+    // 2. Append item or update count in local state
+    setCart(prevCart => {
+      const existing = prevCart.find(item => item.id === selectedProduct.id);
+      if (existing) {
+        return prevCart.map(item => item.id === selectedProduct.id ? { ...item, quantity: item.quantity + 1 } : item);
+      }
+      return [...prevCart, { ...selectedProduct, quantity: 1 }];
+    });
+
+    // 3. Subtract 1 item from display stock placeholder locally
+    setProducts(prevProducts => 
+      prevProducts.map(p => p.id === selectedProduct.id ? { ...p, stock: p.stock - 1 } : p)
+    );
+  };
+
+  // Finalizes transaction with the backend server database
+  const handleCheckout = () => {
+    if (cart.length === 0) return;
+
+    // Send transaction processing payloads sequentially or batched
+    const promises = cart.map(item => 
+      fetch('http://localhost:5000/api/pos/sell', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item.id, quantity: item.quantity })
+      }).then(res => {
+        if (!res.ok) throw new Error(`Failed checkout for item: ${item.name}`);
+        return res.json();
+      })
+    );
+
+    Promise.all(promises)
+      .then(() => {
+        alert("🎉 Order processed successfully! Backend database inventory decremented.");
+        setCart([]); // Clear cart basket
+        connectToBackend(); // Force refresh ground truth stock metrics from DB
+      })
+      .catch(err => {
+        alert(err.message);
+        connectToBackend(); // Reset system values safely
+      });
+  };
 
   if (loading) {
     return (
@@ -90,12 +141,27 @@ function App() {
       {/* Premium Navbar */}
       <nav className="navbar navbar-expand-lg navbar-dark bg-dark py-3 border-bottom border-secondary border-opacity-25 shadow-sm">
         <div className="container-fluid px-4">
-          <a className="navbar-brand fw-black tracking-wider d-flex align-items-center" href="#">
+
+          <a className="navbar-brand fw-black tracking-wider d-flex align-items-center mb-0" href="#">
             <span className="text-warning me-2">⚡</span> LIVE MUSIC
           </a>
-          <div className="navbar-nav ms-auto font-monospace small">
-            <a className="nav-link active px-3 text-warning" href="#">Showroom</a>
-            <a className="nav-link px-3" href="#">POS Backend</a>
+          {/* Mobile Toggle Button */}
+          <button className="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span className="navbar-toggler-icon"></span>
+          </button>
+          <div className="collapse navbar-collapse justify-content-end" id="navbarNav">
+            {/* Flex container grouping text links and badge together with spacing handles */}
+            <div className="d-flex flex-column flex-lg-row align-items-start align-items-lg-center gap-3 mt-3 mt-lg-0">
+              {/* Monospaced Navigation Links */}
+              <div className="navbar-nav flex-row font-monospace small me-lg-2">
+                <a className="nav-link active px-3 text-warning mb-0" href="#">Showroom</a>
+                <a className="nav-link px-3 mb-0 text-white-50" href="#">POS Backend</a>
+              </div>
+              {/* Shopping Session Tracker Badge */}
+              <span className="badge bg-warning text-dark font-monospace px-3 py-2 rounded-pill shadow-sm d-flex align-items-center justify-content-center fw-bold">
+                🛒 Cart ({cart.reduce((sum, item) => sum + item.quantity, 0)})
+              </span> 
+            </div>
           </div>
         </div>
       </nav>
@@ -130,7 +196,7 @@ function App() {
         <div className="row justify-content-center">
           {products.length > 0 ? (
             products.map(item => (
-              <ProductCard key={item.id} product={item} />
+              <ProductCard key={item.id} product={item} onAddToCart={handleAddToCart}/>
             ))
           ) : (
             <div className="text-center py-5">
@@ -139,6 +205,28 @@ function App() {
           )}
         </div>
       </main>
+
+      {/* Persistent Shopping Cart Summary Bar */}
+      {cart.length > 0 && (
+        <div className="fixed-bottom bg-dark text-white p-4 shadow-lg border-top border-secondary border-opacity-50 z-3">
+          <div className="container d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div>
+              <h5 className="mb-1 text-warning fw-bold font-monospace">SHOPPING SESSION SELECTION</h5>
+              <div className="d-flex gap-3 text-white-50 small flex-wrap">
+                {cart.map(item => (
+                  <span key={item.id} className="bg-secondary bg-opacity-25 px-2 py-1 rounded">
+                    {item.name} (x{item.quantity})
+                  </span>
+                ))}
+              </div>
+            </div>
+            <button onClick={handleCheckout} className="btn btn-warning text-dark fw-bold px-5 py-2 rounded-pill shadow">
+              Proceed to Checkout (${cart.reduce((sum, item) => sum + (item.price * item.quantity), 0).toLocaleString()})
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

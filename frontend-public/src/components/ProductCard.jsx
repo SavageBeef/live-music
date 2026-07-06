@@ -1,4 +1,4 @@
-const ProductCard = ({ product }) => {
+const ProductCard = ({ product, onAddToCart }) => {
   return (
     // col-md-6 (2 cards on tablets) | col-lg-4 (3 cards on laptops) | col-xl-3 (4 cards on desktops)
     <div className="col-md-6 col-lg-4 mb-4">
@@ -21,7 +21,7 @@ const ProductCard = ({ product }) => {
         {/* Card Content Area */}
         <div className="card-body d-flex flex-column p-4">
           <h5 className="card-title fw-bold text-dark mb-2">{product.name}</h5>
-          
+
           <p className="card-text text-muted small mb-4 lh-base">
             {product.description}
           </p>
@@ -33,16 +33,31 @@ const ProductCard = ({ product }) => {
               <span className="h4 fw-bold text-dark mb-0">${product.price.toLocaleString()}</span>
             </div>
             
-            {/* Theme-matched Button: Gold accent when active, matches the Hero button style */}
-            <button 
-              className={`btn px-4 py-2 rounded-pill fw-bold text-uppercase tracking-wider btn-sm shadow-sm transition-all ${
-                product.stock > 0 
-                  ? 'btn-warning text-dark fw-bold hover-gold' 
-                  : 'btn-secondary text-white disabled'
-              }`}
-            >
-              {product.stock > 0 ? 'Add to Cart' : 'Out of Stock'}
-            </button>
+            <div className="d-flex flex-column align-items-center" style={{ minWidth: '140px' }}>
+              <div className="mb-2 text-center">
+                {product.stock > 0 ? (
+                  <span className="badge bg-light text-muted font-monospace border fw-normal" style={{ fontSize: '0.7rem' }}>
+                    {product.stock} available
+                  </span>
+                ) : (
+                  <span className="badge bg-danger bg-opacity-10 text-danger font-monospace fw-normal" style={{ fontSize: '0.7rem' }}>
+                    Sold Out
+                  </span>
+                )}
+              </div>
+
+              {/* Theme-matched Button: Gold accent when active, matches the Hero button style */}
+              <button 
+                onClick={() => onAddToCart(product)}
+                className={`btn px-4 py-2 rounded-pill fw-bold text-uppercase tracking-wider btn-sm shadow-sm transition-all ${
+                  product.stock > 0 
+                    ? 'btn-warning text-dark fw-bold hover-gold' 
+                    : 'btn-secondary text-white disabled'
+                }`}
+              >
+                {product.stock > 0 ? 'Add to Cart' : 'Out of Stock'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
