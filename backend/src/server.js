@@ -6,7 +6,7 @@ const path = require('path'); // Node utility for file paths
 const app = express();
 app.use(express.json());
 app.use(cors());
-// CRITICAL: Serve images locally from the backend 'public' folder
+// Serve images locally from the backend 'public' folder
 // Any image inside backend/public/images/ will be available at http://localhost:5000/images/
 app.use(express.static(path.join(__dirname, '../public')));
 
@@ -91,6 +91,38 @@ app.post('/api/pos/restock', (req, res) => {
       res.json({ id, name: row.name, updatedStock: newStock });
     });
   });
+});
+
+// Product Provisioning Endpoint: Adds an entirely new catalog item to the database
+app.post('/api/pos/add-product', (req, res) => {
+    const { name, brand, price, stock, description, image_url } = req.body;
+
+    // Crucial Validation Safeguard
+    if (!name || !brand || !price == null || !stock == null) {
+        return res.status(400).json({ error: "Name, Brand, Price, and Stock are madatory metrics."});
+    }
+
+    const sql = `INSERT INTO products (name, brand, price, stock, description, image_url) VALUES (?, ?, ?, ?, ?, ?)`;
+
+    // Parse inputs to ensure numerical integrity in the data tables
+    const params = [
+        name, 
+        brand, 
+        parseFloat(price), 
+        parseInt(stock, 10),
+        description || '', 
+        image_url || 'http://localhost:5000/images/No-Image-Placeholder.svg'
+    ];
+
+    db.run(sql, params, function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+
+        console.log(`🆕 PROVISIONED: New item "${name}" successfully registered with ID #${this.lastID}`);
+        res.status(201).json({
+            message: "New product added successfully.",
+            product: this.lastID, name, brand
+        });
+    });
 });
 
 const PORT = 5000;

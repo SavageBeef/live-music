@@ -5,6 +5,19 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Form State Control Object (Tracks back-office intake values)
+  const [form, setForm] = useState({
+    name: '',
+    brand: '',
+    price: '',
+    stock: '',
+    description: '',
+    image_url: ''
+  });
+
+  const [formSuccess, setFormSuccess] = useState(null);
+  const [formError, setFormError] = useState(null);
+
   // Fetch the full catalog including out-of-stock items
   const fetchInventory = () => {
     fetch('http://localhost:5000/api/products')
@@ -46,6 +59,40 @@ function App() {
       })
       .catch(err => {
         alert(`❌ Error restocking ${itemName}: ${err.message}`);
+      });
+  };
+
+  // Updates specific controlled input state objects dynamically
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Dispatches form submission payloads down to our new API route
+  const handleCreateProduct = (e) => {
+    e.preventDefault();
+    setFormError(null);
+    setFormSuccess(null);
+
+    fetch('http://localhost:5000/api/pos/add-product', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form)
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to create product.");
+        return data;
+      })
+      .then((data) => {
+        setFormSuccess(`Product "${form.name}" added successfully with ID #${data.product}.`);
+        // Clear the form after successful submission for next product record
+        setForm({ name: '', brand: '', price: '', stock: '', description: '', image_url: '' });
+        // Refresh the inventory to include the newly added product
+        fetchInventory();
+      })
+      .catch((error) => {
+        setFormError(`❌ ${error.message}`);
       });
   };
 
@@ -93,7 +140,7 @@ function App() {
                       <thead className="table-dark text-uppercase fs-7">
                         <tr>
                           <th className="px-4 py-3 text-white-50">ID</th>
-                          <th className="py-3 text-white-50">Item Description</th>
+                          <th className="py-3 text-white-50">Name</th>
                           <th className="py-3 text-white-50">Brand</th>
                           <th className="py-3 text-end text-white-50">Price</th>
                           <th className="py-3 text-center text-white-50">Current Stock</th>
@@ -132,14 +179,58 @@ function App() {
               </div>
             </div>
 
-            {/* Right Column: Premium Placement Intake Panel */}
+            {/* Right Column: Intake Panel */}
             <div className="col-12 col-xl-4">
-              <div className="card border-0 shadow-sm rounded-4 p-5 bg-white text-center custom-card d-flex flex-column align-items-center justify-content-center" style={{ minHeight: '340px' }}>
-                <span className="fs-1 mb-3">📥</span>
-                <h5 className="fw-bold text-dark font-monospace mb-2">Item Intake Panel</h5>
-                <p className="text-muted small px-3 lh-base mb-0">
-                  This workspace will host our dynamic creation entry forms, allowing staff to publish entirely new models straight to the showroom database instantly.
-                </p>
+              <div className="card border-0 shadow-sm rounded-4 p-4 bg-white custom-card">
+                <div className="border-bottom border-light pb-3 mb-4">
+                  <h5 className="fw-bold text-dark font-monospace mb-1">📥 ITEM INTAKE PANEL</h5>
+                  <p className="text-muted small mb-0">Publish an entirely new model selection to the showroom floor instantly.</p>
+                </div>
+
+                {formSuccess && <div className="alert alert-success small py-2 px-3 border-0 rounded-3 mb-3 shadow-sm font-monospace">✅ {formSuccess}</div>}
+                {formError && <div className="alert alert-danger small py-2 px-3 border-0 rounded-3 mb-3 shadow-sm font-monospace">❌ {formError}</div>}
+
+                <form onSubmit={handleCreateProduct}>
+                  <div className="row g-3 font-monospace small">
+                    
+                    <div className="col-12">
+                      <label className="form-label fw-bold text-secondary mb-1">Product Name *</label>
+                      <input type="text" name="name" value={form.name} onChange={handleInputChange} className="form-control form-control-sm border-light-subtle bg-light bg-opacity-25 py-2 px-3 rounded-3" placeholder="e.g. Stratocaster Player" required />
+                    </div>
+
+                    <div className="col-12">
+                      <label className="form-label fw-bold text-secondary mb-1">Brand Name *</label>
+                      <input type="text" name="brand" value={form.brand} onChange={handleInputChange} className="form-control form-control-sm border-light-subtle bg-light bg-opacity-25 py-2 px-3 rounded-3" placeholder="e.g. Fender" required />
+                    </div>
+
+                    <div className="col-md-6">
+                      <label className="form-label fw-bold text-secondary mb-1">Price ($USD) *</label>
+                      <input type="number" step="0.01" min="0" name="price" value={form.price} onChange={handleInputChange} className="form-control form-control-sm border-light-subtle bg-light bg-opacity-25 py-2 px-3 rounded-3" placeholder="0.00" required />
+                    </div>
+
+                    <div className="col-md-6">
+                      <label className="form-label fw-bold text-secondary mb-1">Initial Stock Count *</label>
+                      <input type="number" min="0" name="stock" value={form.stock} onChange={handleInputChange} className="form-control form-control-sm border-light-subtle bg-light bg-opacity-25 py-2 px-3 rounded-3" placeholder="0" required />
+                    </div>
+
+                    <div className="col-12">
+                      <label className="form-label fw-bold text-secondary mb-1">Description</label>
+                      <textarea name="description" rows="2" value={form.description} onChange={handleInputChange} className="form-control form-control-sm border-light-subtle bg-light bg-opacity-25 py-2 px-3 rounded-3" placeholder="Provide product features, tonal reviews, wood choices..."></textarea>
+                    </div>
+
+                    <div className="col-12 mb-2">
+                      <label className="form-label fw-bold text-secondary mb-1">Image Network URL (Optional)</label>
+                      <input type="url" name="image_url" value={form.image_url} onChange={handleInputChange} className="form-control form-control-sm border-light-subtle bg-light bg-opacity-25 py-2 px-3 rounded-3" placeholder="Leave blank for generic fallback image" />
+                    </div>
+
+                    <div className="col-12 pt-2">
+                      <button type="submit" className="btn btn-dark text-white fw-bold w-100 py-2.5 rounded-pill shadow-sm transition-all text-uppercase tracking-wider">
+                        Publish To Showroom Floor 🚀
+                      </button>
+                    </div>
+
+                  </div>
+                </form>
               </div>
             </div>
           </div>

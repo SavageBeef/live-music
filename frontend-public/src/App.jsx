@@ -203,7 +203,7 @@ function App() {
 
       {/* Main Catalog Grid */}
       <main className="container">
-        <div className="row justify-content-center">
+        <div className="row justify-content-start">
           {products.length > 0 ? (
             products.map(item => (
               <ProductCard key={item.id} product={item} onAddToCart={handleAddToCart}/>
