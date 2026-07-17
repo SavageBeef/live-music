@@ -45,7 +45,7 @@ db.serialize(() => {
     stmt.finalize();
 });
 
-// 3. Public Route: Get Inventory for the Website
+// 3. Public Route: Get Inventory for the Website (READ Operation)
 app.get('/api/products', (req, res) => {
     db.all("SELECT * FROM products WHERE stock > 0", [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -93,13 +93,13 @@ app.post('/api/pos/restock', (req, res) => {
   });
 });
 
-// Product Provisioning Endpoint: Adds an entirely new catalog item to the database
+// Product Provisioning Endpoint: Adds an entirely new catalog item to the database (CREATE Operation)
 app.post('/api/pos/add-product', (req, res) => {
     const { name, brand, price, stock, description, image_url } = req.body;
 
     // Crucial Validation Safeguard
     if (!name || !brand || !price == null || !stock == null) {
-        return res.status(400).json({ error: "Name, Brand, Price, and Stock are madatory metrics."});
+        return res.status(400).json({ error: "Name, Brand, Price, and Stock are mandatory metrics."});
     }
 
     const sql = `INSERT INTO products (name, brand, price, stock, description, image_url) VALUES (?, ?, ?, ?, ?, ?)`;
@@ -122,6 +122,56 @@ app.post('/api/pos/add-product', (req, res) => {
             message: "New product added successfully.",
             product: this.lastID, name, brand
         });
+    });
+});
+
+// Product Update Endpoint: Modifies an existing catalog item in the database (UPDATE Operation)
+app.put('/api/pos/update-product/:id', (req, res) => {
+    const { id } = req.params;
+    const { name, brand, price, stock, description, image_url } = req.body;
+
+    // Validate that at least the required fields are provided for update
+    if (!name || !brand || price == null || stock == null) {
+        return res.status(400).json({ error: "Name, Brand, Price, and Stock must be provided for update." });
+    }
+
+    const sql = `
+        UPDATE products 
+        SET name = ?, brand = ?, price = ?, stock = ?, description = ?, image_url = ?
+        WHERE id = ?  
+    `;
+
+    const params = [
+        name.trim(), 
+        brand.trim(), 
+        parseFloat(price), 
+        parseInt(stock, 10), 
+        description || '', 
+        image_url || 'http://localhost:5000/images/No-Image-Placeholder.svg', 
+        id
+    ];
+
+    db.run(sql, params, function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (this.changes === 0) return res.status(404).json({ error: "Product not found or no changes made." });
+
+        console.log(`📝 UPDATED: Product ID #${id} has been modified successfully.`);
+        res.json({ message: "Product updated successfully.", productId: id });
+    });
+});
+
+// Product Deletion Endpoint: Removes a catalog item from the database (DELETE Operation)
+app.delete('/api/pos/delete-product/:id', (req, res) => {
+    const { id } = req.params;
+
+    const sql = `DELETE FROM products WHERE id = ?`;
+
+    db.run(sql, [id], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (this.changes === 0) return res.status(404).json({ error: "Product not found." });
+
+        console.log(`🗑️ DELETED: Product ID #${id} has been removed from the catalog.`);
+        res.json({ message: "Product deleted successfully.", productId: id });
     });
 });
 

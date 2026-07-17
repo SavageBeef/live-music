@@ -18,6 +18,8 @@ function App() {
   const [formSuccess, setFormSuccess] = useState(null);
   const [formError, setFormError] = useState(null);
 
+  const [editingId, setEditingId] = useState(null);
+
   // Fetch the full catalog including out-of-stock items
   const fetchInventory = () => {
     fetch('http://localhost:5000/api/products')
@@ -74,25 +76,84 @@ function App() {
     setFormError(null);
     setFormSuccess(null);
 
-    fetch('http://localhost:5000/api/pos/add-product', {
-      method: 'POST',
+    // Dynamic URL and method selection based on whether we're editing or creating a new product
+    const url = editingId
+      ? `http://localhost:5000/api/pos/update-product/${editingId}`
+      : 'http://localhost:5000/api/pos/add-product';
+    const method = editingId ? 'PUT' : 'POST';
+
+    fetch(url, {
+      method: method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form)
     })
       .then(async (res) => {
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to create product.");
+        if (!res.ok) throw new Error(data.error || "Failed to process product submission.");
         return data;
       })
       .then((data) => {
-        setFormSuccess(`Product "${form.name}" added successfully with ID #${data.product}.`);
+        if (editingId) {
+          setFormSuccess(`Product changes saved successfully!`);
+          setEditingId(null); // Reset editing state after successful update
+        } else {
+          setFormSuccess(`Product "${form.name}" added successfully with ID #${data.product}.`);
+        }
+
         // Clear the form after successful submission for next product record
         setForm({ name: '', brand: '', price: '', stock: '', description: '', image_url: '' });
-        // Refresh the inventory to include the newly added product
+        // Refresh the inventory to include the newly added/updated product
         fetchInventory();
       })
       .catch((error) => {
         setFormError(`❌ ${error.message}`);
+      });
+  };
+
+  // Trigger the intake form to pre-fill with the selected product's data for editing
+  const handleEditClick = (item) => {
+    setFormError(null);
+    setFormSuccess(null);
+    setEditingId(item.id);
+    setForm({
+      name: item.name,
+      brand: item.brand,
+      price: item.price,
+      stock: item.stock,
+      description: item.description || '',
+      image_url: item.image_url || ''
+    });
+  };
+
+  // Cancel the edit operation and reset the form to its default state
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setForm({ name: '', brand: '', price: '', stock: '', description: '', image_url: '' });
+    setFormError(null);
+    setFormSuccess(null);
+  };
+
+  // Dispatch a server-side DELETE mutation sequence
+  const handleDeleteProduct = (id, itemName) => {
+    if (!window.confirm(`⚠️ Crucial Action: Are you sure you want to permanently delete "${itemName}" from the catalog? This action cannot be undone.`)) {
+      return;
+    }
+
+    fetch(`http://localhost:5000/api/pos/delete-product/${id}`, {
+      method: 'DELETE'
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to delete product.");
+        return data;
+      })
+      .then(() => {
+        setFormSuccess(`Product "${itemName}" has been successfully deleted from the catalog.`);
+        if (editingId === id) handleCancelEdit(); // Reset form if the deleted product was being edited
+        fetchInventory();
+      })
+      .catch((error) => {
+        setFormError(`❌ Deletion Error: ${error.message}`);
       });
   };
 
@@ -166,9 +227,17 @@ function App() {
                               )}
                             </td>
                             <td className="px-4 text-center">
-                              <button onClick={() => handleRestock(item.id, item.name)} className="btn btn-sm btn-warning text-dark px-3 rounded-pill fw-bold shadow-sm transition-all">
-                                +10 Restock
-                              </button>
+                              <div className="btn-group gap-1">
+                                <button onClick={() => handleRestock(item.id, item.name)} className="btn btn-sm btn-warning text-dark px-3 rounded-pill fw-bold shadow-sm transition-all small">
+                                  +10 Restock
+                                </button>
+                                <button onClick={() => handleEditClick(item)} className="btn btn-sm btn-outline-secondary px-3 rounded-pill transition-all small">
+                                  Edit
+                                </button>
+                                <button onClick={() => handleDeleteProduct(item.id, item.name)} className="btn btn-sm btn-outline-danger px-3 rounded-pill transition-all small">
+                                  Delete
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -183,8 +252,12 @@ function App() {
             <div className="col-12 col-xl-4">
               <div className="card border-0 shadow-sm rounded-4 p-4 bg-white custom-card">
                 <div className="border-bottom border-light pb-3 mb-4">
-                  <h5 className="fw-bold text-dark font-monospace mb-1">📥 ITEM INTAKE PANEL</h5>
-                  <p className="text-muted small mb-0">Publish an entirely new model selection to the showroom floor instantly.</p>
+                  <h5 className="fw-bold text-dark font-monospace mb-1">
+                    {editingId ? "📝 EDIT CATALOG ITEM" : "📥 ITEM INTAKE PANEL"}
+                  </h5>
+                  <p className="text-muted small mb-0">
+                    {editingId ? `Modifying settings for active product ID #${editingId}.` : "Publish an entirely new model selection to the showroom floor instantly."}
+                  </p>
                 </div>
 
                 {formSuccess && <div className="alert alert-success small py-2 px-3 border-0 rounded-3 mb-3 shadow-sm font-monospace">✅ {formSuccess}</div>}
@@ -223,9 +296,14 @@ function App() {
                       <input type="url" name="image_url" value={form.image_url} onChange={handleInputChange} className="form-control form-control-sm border-light-subtle bg-light bg-opacity-25 py-2 px-3 rounded-3" placeholder="Leave blank for generic fallback image" />
                     </div>
 
-                    <div className="col-12 pt-2">
-                      <button type="submit" className="btn btn-dark text-white fw-bold w-100 py-2.5 rounded-pill shadow-sm transition-all text-uppercase tracking-wider">
-                        Publish To Showroom Floor 🚀
+                    <div className="col-12 pt-2 d-flex gap-2">
+                      {editingId && (
+                        <button type="button" onClick={handleCancelEdit} className="btn btn-outline-secondary fw-bold w-50 py-2.5 rounded-pill shadow-sm text-uppercase tracking-wider">
+                          Cancel
+                        </button>
+                      )}
+                      <button type="submit" className={`btn ${editingId ? 'btn-success' : 'btn-dark'} text-white fw-bold ${editingId ? 'w-50' : 'w-100'} py-2.5 rounded-pill shadow-sm transition-all text-uppercase tracking-wider`}>
+                        {editingId ? "Save Changes" : "Publish To Floor 🚀"}
                       </button>
                     </div>
 
