@@ -2,6 +2,8 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const path = require('path'); // Node utility for file paths
+const multer = require('multer');
+const fs = require('fs');
 
 const app = express();
 app.use(express.json());
@@ -9,6 +11,37 @@ app.use(cors());
 // Serve images locally from the backend 'public' folder
 // Any image inside backend/public/images/ will be available at http://localhost:5000/images/
 app.use(express.static(path.join(__dirname, '../public')));
+
+// Configure storage for file uploads
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, path.join(__dirname, '../public/images'));
+    },
+    filename: (req, file, cb) => {
+        // Create unique filenames to prevent collisions
+        cb(null, `${Date.now()}-${file.originalname}`);
+    }
+});
+const upload = multer({ storage: storage });
+
+// Helper utility to safely delete uploaded images from the server disk
+const deleteDiskImage = (imageUrl) => {
+    if (!imageUrl) return;
+    
+    // Safety check: Never delete your default system vector placeholders
+    if (imageUrl.includes('No-Image-Placeholder.svg') || imageUrl.includes('default.svg')) {
+        return;
+    }
+
+    // Extract just the filename from the end of the URL string
+    const filename = path.basename(imageUrl);
+    const filePath = path.join(__dirname, '../public/images', filename);
+
+    fs.unlink(filePath, (err) => {
+        if (err) console.error(`⚠️ Asset Orphan Alert: Failed to delete disk image: ${err.message}`);
+        else console.log(`🗑️ Disk Purge Success: Removed ${filename}`);
+    });
+};
 
 // 1. Connect to SQLite Database
 // Use './data/music_store.db' for a permanent file
@@ -97,8 +130,10 @@ app.post('/api/pos/restock', (req, res) => {
 app.post('/api/pos/add-product', (req, res) => {
     const { name, brand, price, stock, description, image_url } = req.body;
 
+    console.log("📥 BACKEND RECEIVED IMAGE_URL:", image_url);
+
     // Crucial Validation Safeguard
-    if (!name || !brand || !price == null || !stock == null) {
+    if (!name || !brand || price == null || stock == null) {
         return res.status(400).json({ error: "Name, Brand, Price, and Stock are mandatory metrics."});
     }
 
@@ -135,28 +170,38 @@ app.put('/api/pos/update-product/:id', (req, res) => {
         return res.status(400).json({ error: "Name, Brand, Price, and Stock must be provided for update." });
     }
 
-    const sql = `
-        UPDATE products 
-        SET name = ?, brand = ?, price = ?, stock = ?, description = ?, image_url = ?
-        WHERE id = ?  
-    `;
-
-    const params = [
-        name.trim(), 
-        brand.trim(), 
-        parseFloat(price), 
-        parseInt(stock, 10), 
-        description || '', 
-        image_url || 'http://localhost:5000/images/No-Image-Placeholder.svg', 
-        id
-    ];
-
-    db.run(sql, params, function(err) {
+    // Query old image state to compare asset path changes
+    db.get("SELECT image_url FROM products WHERE id = ?", [id], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
-        if (this.changes === 0) return res.status(404).json({ error: "Product not found or no changes made." });
+        
+        // If the user uploaded a brand new image, destroy the old one
+        if (row && row.image_url !== image_url) {
+            deleteDiskImage(row.image_url);
+        }
 
-        console.log(`📝 UPDATED: Product ID #${id} has been modified successfully.`);
-        res.json({ message: "Product updated successfully.", productId: id });
+        const sql = `
+            UPDATE products 
+            SET name = ?, brand = ?, price = ?, stock = ?, description = ?, image_url = ?
+            WHERE id = ?  
+        `;
+
+        const params = [
+            name.trim(), 
+            brand.trim(), 
+            parseFloat(price), 
+            parseInt(stock, 10), 
+            description || '', 
+            image_url || 'http://localhost:5000/images/No-Image-Placeholder.svg', 
+            id
+        ];
+
+        db.run(sql, params, function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            if (this.changes === 0) return res.status(404).json({ error: "Product not found or no changes made." });
+
+            console.log(`📝 UPDATED: Product ID #${id} has been modified successfully.`);
+            res.json({ message: "Product updated successfully.", productId: id });
+        });
     });
 });
 
@@ -164,15 +209,32 @@ app.put('/api/pos/update-product/:id', (req, res) => {
 app.delete('/api/pos/delete-product/:id', (req, res) => {
     const { id } = req.params;
 
-    const sql = `DELETE FROM products WHERE id = ?`;
-
-    db.run(sql, [id], function(err) {
+    // Find the image URL associated with this record first
+    db.get("SELECT image_url FROM products WHERE id = ?", [id], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
-        if (this.changes === 0) return res.status(404).json({ error: "Product not found." });
+        if (!row) return res.status(404).json({ error: "Product not found." });
 
-        console.log(`🗑️ DELETED: Product ID #${id} has been removed from the catalog.`);
-        res.json({ message: "Product deleted successfully.", productId: id });
+        // Trigger disk file elimination
+        deleteDiskImage(row.image_url);
+
+        // Clear the entry out of SQLite database memory entirely
+        db.run("DELETE FROM products WHERE id = ?", [id], function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            if (this.changes === 0) return res.status(404).json({ error: "Product not found." });
+
+            console.log(`🗑️ DELETED: Product ID #${id} has been removed from the catalog.`);
+            res.json({ message: "Product deleted successfully.", productId: id });
+        });
     });
+});
+
+// Image Upload Endpoint
+app.post('/api/upload', upload.single('image'), (req, res) => {
+    if (!req.file) return res.status(400).json({ error: "No file uploaded." });
+    
+    // Return the URL for the frontend to save in the database
+    const imageUrl = `http://localhost:5000/images/${req.file.filename}`;
+    res.json({ imageUrl });
 });
 
 const PORT = 5000;

@@ -19,6 +19,7 @@ function App() {
   const [formError, setFormError] = useState(null);
 
   const [editingId, setEditingId] = useState(null);
+  const [filePreview, setFilePreview] = useState(null);
 
   // Fetch the full catalog including out-of-stock items
   const fetchInventory = () => {
@@ -64,6 +65,19 @@ function App() {
       });
   };
 
+  // Handles file selection and generates a local browser preview URL
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setForm(prev => ({ ...prev, file }));
+      // Generate a temporary local URL for immediate rendering
+      setFilePreview(URL.createObjectURL(file));
+    } else {
+      setForm(prev => ({ ...prev, file: null }));
+      setFilePreview(null);
+    }
+  };
+
   // Updates specific controlled input state objects dynamically
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -71,10 +85,36 @@ function App() {
   };
 
   // Dispatches form submission payloads down to our new API route
-  const handleCreateProduct = (e) => {
+  const handleCreateProduct = async (e) => {
     e.preventDefault();
     setFormError(null);
     setFormSuccess(null);
+
+    let finalImageUrl = form.image_url;
+
+    // If a file exists, upload it to the backend first
+    if (form.file) {
+      const formData = new FormData();
+      formData.append('image', form.file);
+
+      const uploadRes = await fetch('http://localhost:5000/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) {
+        setFormError(uploadData.error || "Failed to upload image.");
+        return;
+      }
+      finalImageUrl = uploadData.imageUrl;
+    }
+
+    // Prepare payload (using finalImageUrl instead of direct form input)
+    const payload = { ...form, image_url: finalImageUrl };
+    delete payload.file; // Remove file object from JSON payload
+
+    console.log("🚀 FRONTEND SENDING PAYLOAD:", payload);
 
     // Dynamic URL and method selection based on whether we're editing or creating a new product
     const url = editingId
@@ -85,7 +125,7 @@ function App() {
     fetch(url, {
       method: method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form)
+      body: JSON.stringify(payload)
     })
       .then(async (res) => {
         const data = await res.json();
@@ -102,6 +142,11 @@ function App() {
 
         // Clear the form after successful submission for next product record
         setForm({ name: '', brand: '', price: '', stock: '', description: '', image_url: '' });
+        document.getElementById('productImageInput').value = ''; // <-- Clear the file input element cleanly!
+
+        if (filePreview) URL.revokeObjectURL(filePreview); // Free browser memory
+        setFilePreview(null);
+
         // Refresh the inventory to include the newly added/updated product
         fetchInventory();
       })
@@ -123,6 +168,12 @@ function App() {
       description: item.description || '',
       image_url: item.image_url || ''
     });
+
+    // Clear any unsubmitted new file selections when entering edit mode
+    if (filePreview) URL.revokeObjectURL(filePreview);
+    setFilePreview(null);
+    const fileInput = document.getElementById('productImageInput');
+    if (fileInput) fileInput.value = '';
   };
 
   // Cancel the edit operation and reset the form to its default state
@@ -131,6 +182,9 @@ function App() {
     setForm({ name: '', brand: '', price: '', stock: '', description: '', image_url: '' });
     setFormError(null);
     setFormSuccess(null);
+
+    if (filePreview) URL.revokeObjectURL(filePreview); // Free browser memory
+    setFilePreview(null);
   };
 
   // Dispatch a server-side DELETE mutation sequence
@@ -292,8 +346,45 @@ function App() {
                     </div>
 
                     <div className="col-12 mb-2">
-                      <label className="form-label fw-bold text-secondary mb-1">Image Network URL (Optional)</label>
-                      <input type="url" name="image_url" value={form.image_url} onChange={handleInputChange} className="form-control form-control-sm border-light-subtle bg-light bg-opacity-25 py-2 px-3 rounded-3" placeholder="Leave blank for generic fallback image" />
+                      <label className="form-label fw-bold text-secondary mb-1">Product Image</label>
+
+                      {/* Unified Preview Container: Fires for NEW local files OR existing server assets */}
+                      {(filePreview || (editingId && form.image_url)) && (
+                        <div className="d-flex align-items-center gap-3 p-2 mb-2 border border-light-subtle bg-light bg-opacity-50 rounded-3">
+                          <img 
+                            src={filePreview || form.image_url} 
+                            alt="Preview" 
+                            className="rounded border bg-white object-fit-contain" 
+                            style={{ width: '50px', height: '50px' }} 
+                          />
+                          <div className="flex-grow-1 min-w-0">
+                            <span className="d-block text-muted small text-truncate font-monospace">
+                              {filePreview ? "✨ Local Draft Selected" : "📦 Saved Database Asset"}
+                            </span>
+                          </div>
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              if (filePreview) URL.revokeObjectURL(filePreview);
+                              setFilePreview(null);
+                              setForm(prev => ({ ...prev, file: null, image_url: editingId ? '' : prev.image_url }));
+                              document.getElementById('productImageInput').value = '';
+                            }}
+                            className="btn btn-sm btn-outline-danger font-monospace px-2 py-0.5"
+                            style={{ fontSize: '0.7rem' }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
+
+                      <input
+                        id="productImageInput" 
+                        type="file" 
+                        accept="image/*"
+                        onChange={handleFileChange} 
+                        className="form-control form-control-sm border-light-subtle bg-light bg-opacity-25 py-2 px-3 rounded-3" 
+                      />
                     </div>
 
                     <div className="col-12 pt-2 d-flex gap-2">
