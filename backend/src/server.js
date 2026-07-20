@@ -1,9 +1,9 @@
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const path = require('path'); // Node utility for file paths
 const multer = require('multer');
 const fs = require('fs');
+const db = require('./models/db');
 
 const app = express();
 app.use(express.json());
@@ -43,42 +43,10 @@ const deleteDiskImage = (imageUrl) => {
     });
 };
 
-// 1. Connect to SQLite Database
-// Use './data/music_store.db' for a permanent file
-const db = new sqlite3.Database(':memory:', (err) => {
-    if (err) return console.error(err.message);
-    console.log('Connected to the in-memory SQLite database.');
-});
 
-// 2. Initialize Tables & Seed Data
-db.serialize(() => {
-    db.run(`CREATE TABLE products (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        brand TEXT,
-        price REAL,
-        stock INTEGER,
-        description TEXT,
-        image_url TEXT
-    )`);
+// --- API ROUTES ---
 
-    const stmt = db.prepare("INSERT INTO products (name, brand, price, stock, description, image_url) VALUES (?, ?, ?, ?, ?, ?)");
-    stmt.run("M7", "Sire", 1200.00, 3,
-        "The ultimate bass guitar with a powerful and versatile sound.",
-        "http://localhost:5000/images/Sire_M7.webp"
-    );
-    stmt.run("Classic Vibe", "Squier", 550.00, 6,
-        "A vintage-inspired electric guitar with a timeless design and rich tone.",
-        "http://localhost:5000/images/Squier_Classic_Vibe_'50s.png"
-    );
-    stmt.run("SansAmp Bass Driver DI", "Tech 21", 250.00, 50,
-        "A compact and powerful bass preamp pedal that delivers a wide range of tones.",
-        "http://localhost:5000/images/SansAmp_Bass_DI.webp"
-    );
-    stmt.finalize();
-});
-
-// 3. Public Route: Get Inventory for the Website (READ Operation)
+// Public Route: Get Inventory (READ Operation)
 app.get('/api/products', (req, res) => {
     db.all("SELECT * FROM products WHERE stock > 0", [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -86,7 +54,7 @@ app.get('/api/products', (req, res) => {
     });
 });
 
-// 4. POS Route: Update Stock after a sale
+// POS Route: Update Stock after a sale
 app.post('/api/pos/sell', (req, res) => {
     const { id, quantity } = req.body;
     
@@ -105,7 +73,6 @@ app.post('/api/pos/sell', (req, res) => {
 // Restock endpoint for staff back-office management
 app.post('/api/pos/restock', (req, res) => {
   const { id, quantity } = req.body;
-
   if (!id || !quantity || quantity <= 0) {
     return res.status(400).json({ error: "Valid product ID and increment quantity are required." });
   }
@@ -116,17 +83,15 @@ app.post('/api/pos/restock', (req, res) => {
     if (!row) return res.status(404).json({ error: "Product not found." });
 
     const newStock = row.stock + parseInt(quantity, 10);
-
     db.run('UPDATE products SET stock = ? WHERE id = ?', [newStock, id], function(updateErr) {
       if (updateErr) return res.status(500).json({ error: updateErr.message });
-      
       console.log(`📦 RESTOCK: ${row.name} stock increased to ${newStock}`);
       res.json({ id, name: row.name, updatedStock: newStock });
     });
   });
 });
 
-// Product Provisioning Endpoint: Adds an entirely new catalog item to the database (CREATE Operation)
+// Product Provisioning Endpoint: Adds a new catalog item to the database (CREATE Operation)
 app.post('/api/pos/add-product', (req, res) => {
     const { name, brand, price, stock, description, image_url } = req.body;
 
@@ -141,17 +106,12 @@ app.post('/api/pos/add-product', (req, res) => {
 
     // Parse inputs to ensure numerical integrity in the data tables
     const params = [
-        name, 
-        brand, 
-        parseFloat(price), 
-        parseInt(stock, 10),
-        description || '', 
+        name, brand, parseFloat(price), parseInt(stock, 10), description || '', 
         image_url || 'http://localhost:5000/images/No-Image-Placeholder.svg'
     ];
 
     db.run(sql, params, function(err) {
         if (err) return res.status(500).json({ error: err.message });
-
         console.log(`🆕 PROVISIONED: New item "${name}" successfully registered with ID #${this.lastID}`);
         res.status(201).json({
             message: "New product added successfully.",
@@ -173,7 +133,6 @@ app.put('/api/pos/update-product/:id', (req, res) => {
     // Query old image state to compare asset path changes
     db.get("SELECT image_url FROM products WHERE id = ?", [id], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
-        
         // If the user uploaded a brand new image, destroy the old one
         if (row && row.image_url !== image_url) {
             deleteDiskImage(row.image_url);
@@ -184,31 +143,23 @@ app.put('/api/pos/update-product/:id', (req, res) => {
             SET name = ?, brand = ?, price = ?, stock = ?, description = ?, image_url = ?
             WHERE id = ?  
         `;
-
         const params = [
-            name.trim(), 
-            brand.trim(), 
-            parseFloat(price), 
-            parseInt(stock, 10), 
-            description || '', 
-            image_url || 'http://localhost:5000/images/No-Image-Placeholder.svg', 
-            id
+            name.trim(), brand.trim(), parseFloat(price), parseInt(stock, 10), description || '', 
+            image_url || 'http://localhost:5000/images/No-Image-Placeholder.svg',id
         ];
 
         db.run(sql, params, function(err) {
             if (err) return res.status(500).json({ error: err.message });
             if (this.changes === 0) return res.status(404).json({ error: "Product not found or no changes made." });
-
             console.log(`📝 UPDATED: Product ID #${id} has been modified successfully.`);
             res.json({ message: "Product updated successfully.", productId: id });
         });
     });
 });
 
-// Product Deletion Endpoint: Removes a catalog item from the database (DELETE Operation)
+// Product Deletion Endpoint: Remove a catalog item from the database (DELETE Operation)
 app.delete('/api/pos/delete-product/:id', (req, res) => {
     const { id } = req.params;
-
     // Find the image URL associated with this record first
     db.get("SELECT image_url FROM products WHERE id = ?", [id], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -216,12 +167,10 @@ app.delete('/api/pos/delete-product/:id', (req, res) => {
 
         // Trigger disk file elimination
         deleteDiskImage(row.image_url);
-
         // Clear the entry out of SQLite database memory entirely
         db.run("DELETE FROM products WHERE id = ?", [id], function(err) {
             if (err) return res.status(500).json({ error: err.message });
             if (this.changes === 0) return res.status(404).json({ error: "Product not found." });
-
             console.log(`🗑️ DELETED: Product ID #${id} has been removed from the catalog.`);
             res.json({ message: "Product deleted successfully.", productId: id });
         });
