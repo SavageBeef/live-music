@@ -140,4 +140,5 @@ If an advisory requires a major version bump that could potentially introduce br
 ```bash
 npm audit fix --force
 ```
-> [!WARNING] Always run your local test suites or execute a sanity check on your UI environments (`frontend-public` / `frontend-pos`) immediately after a forced audit fix to ensure an upgraded package hasn't deprecated an active method or component layout.
+> [!WARNING] 
+> Always run your local test suites or execute a sanity check on your UI environments (`frontend-public` / `frontend-pos`) immediately after a forced audit fix to ensure an upgraded package hasn't deprecated an active method or component layout.
