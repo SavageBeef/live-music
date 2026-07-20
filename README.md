@@ -31,6 +31,7 @@ To prevent documentation bloat in the root file, all granular technical blueprin
 *   **[03. Frontend Public Showroom Architecture](./docs/03-frontend-public-architecture.md)**: Read-only catalog ingestion strategies, fixed aspect-ratio image rendering, and connection resilience background loops.
 *   **[04. Frontend POS Dashboard Architecture](./docs/04-frontend-pos-architecture.md)**: State machine integration for creating/editing/deleting items, and the two-stage multipart file upload handshake.
 *   **[05. The Design System (The Vibe)](./docs/05-design-system.md)**: The styling tokens, color palette definitions, layout spacing rules, and typography principles for the "Midnight Lounge" theme.
+*   **[06. Project Roadmap & Development Milestones](./docs/06-roadmap.md)**: Completed project sprints, active milestones, ongoing tasks, and future feature planning.
 
 ---
 
