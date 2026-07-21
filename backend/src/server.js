@@ -46,15 +46,15 @@ const deleteDiskImage = (imageUrl) => {
 
 // --- API ROUTES ---
 
-// Public Route: Get Inventory (READ Operation)
+// Get Inventory Endpoint: Returns all products in the database (READ Operation)
 app.get('/api/products', (req, res) => {
-    db.all("SELECT * FROM products WHERE stock > 0", [], (err, rows) => {
+    db.all("SELECT * FROM products", [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
 });
 
-// POS Route: Update Stock after a sale
+// Destock Endpoint: Records a sale and decrements the stock of a product in the database (UPDATE Operation)
 app.post('/api/pos/sell', (req, res) => {
     const { id, quantity } = req.body;
     
@@ -70,7 +70,7 @@ app.post('/api/pos/sell', (req, res) => {
     );
 });
 
-// Restock endpoint for staff back-office management
+// Restock Endpoint: Increases the stock of a product in the database (UPDATE Operation)
 app.post('/api/pos/restock', (req, res) => {
   const { id, quantity } = req.body;
   if (!id || !quantity || quantity <= 0) {
@@ -177,7 +177,7 @@ app.delete('/api/pos/delete-product/:id', (req, res) => {
     });
 });
 
-// Image Upload Endpoint
+// Image Upload Endpoint: Handles file uploads for product images and returns the accessible URL (CREATE Operation)
 app.post('/api/upload', upload.single('image'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No file uploaded." });
     
