@@ -35,6 +35,14 @@ To avoid local process collisions, the development environments are strictly map
 | **`frontend-public`** | Customer Showroom | `http://localhost:5173` |
 | **`frontend-pos`** | Staff Operations | `http://localhost:5174` |
 
+> [!NOTE]
+> **Network Host Binding (`host: true`)**
+> Both frontend applications configure `server.host: true` inside their respective `vite.config.js` files. This instructs Vite to bind to `0.0.0.0` (all network interfaces) rather than strictly binding to loopback (`127.0.0.1`). Because this is handled directly in the configuration, appending `-- --host` to startup scripts (`npm run dev -- --host`) is no longer required in the terminal.
+>
+> * **Inside Docker (Primary Intent):** Required so that Docker port forwarding (`5173:5173` / `5174:5174`) can deliver browser requests from your **host machine** across the container's virtual network interface (`eth0`). Without this, Vite rejects host requests because it only listens inside the container's loopback interface. As a secondary byproduct, LAN devices can also reach the container via the host's IP address.
+> * **On Host Machine (Direct Node Runtime):** The host machine already has direct access to `localhost`. The primary benefit here is exposing the server to your local network (LAN), allowing real-time testing on physical mobile devices or secondary screens via `http://<host-ip>:<port>`.
+> * **Host Firewall Considerations:** For external network or mobile access to function (in either Docker or local mode), your host operating system's firewall (e.g., Windows Defender, macOS Firewall, or `ufw`) may need an inbound rule allowing traffic through target ports `5173` and `5174`.
+
 ---
 
 ## 🚀 Boot Procedures
@@ -66,11 +74,11 @@ cd backend && node --watch src/server.js
 
 # Terminal 2: Launch Public Showroom
 docker compose exec dev-shell sh 
-cd frontend-public && npm run dev -- --host # Exposes container ports to your local system
+cd frontend-public && npm run dev
 
 # Terminal 3: Launch Staff Dashboard
 docker compose exec dev-shell sh
-cd frontend-pos && npm run dev -- --host
+cd frontend-pos && npm run dev
 ```
 
 ---
