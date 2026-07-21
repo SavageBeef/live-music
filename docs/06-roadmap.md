@@ -51,20 +51,30 @@ This document tracks the architectural phases, active sprints, and future engine
 
 ---
 
-## 🟡 Phase 3: Persistent Storage & Data Migration
+## 🟢 Phase 3: Persistent Storage & Data Migration
 *Goal: Shift away from volatile server RAM to a permanent, persistent database file with safe host volume mapping.*
 
-*   [ ] **[ONGOING]** Refactor database configuration script to target a physical binary file (`/data/live_music.db`).
-*   [ ] Verify proper creation of persistent directories on server startup if they do not exist.
-*   [ ] Configure Docker volume mount points to prevent data loss whenever containers tear down or reboot.
-*   [ ] Write a robust SQL migration/seeding routine that safely populates base stock on a clean file creation without duplicating entries on subsequent boots.
+*   [x] Refactor database configuration script to target a physical binary file (`/data/live_music.db`).
+*   [x] Verify proper creation of persistent directories on server startup if they do not exist.
+*   [x] Configure Docker volume mount points to prevent data loss whenever containers tear down or reboot.
+*   [x] Write a robust SQL migration/seeding routine that safely populates base stock on a clean file creation without duplicating entries on subsequent boots.
+*   [x] Update catalog queries to return zero-stock items so staff and customers see accurate "Out of Stock" UI states.
 
 ---
 
 ## 🔴 Phase 4: Core POS Features & Transaction Ledger
-*Goal: Expand backend business logic to handle actual checkout workflows and sales analytics.*
+*Goal: Expand backend business logic to handle actual checkout workflows, cart persistence, and sales analytics.*
 
 *   [ ] Design a relational `sales` or `transactions` ledger database schema table.
 *   [ ] Build transaction-safe checkout controllers that decrement structural item stock numbers atomically when a purchase request is fired.
+*   [ ] Build shopping cart management state in `frontend-public`.
 *   [ ] Add historical receipt viewports and basic revenue data cards to the staff `frontend-pos` dashboard.
 *   [ ] Implement lightweight input validations on stock changes to prevent accidental human entry errors.
+
+---
+
+## 🔴 Phase 5: Authentication & Access Control
+*Goal: Secure back-office operations and customer profile management.*
+
+*   [ ] Implement JWT / session-based staff authentication for `frontend-pos`.
+*   [ ] Protect CRUD endpoints with authorization middleware.
