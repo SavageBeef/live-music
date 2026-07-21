@@ -5,6 +5,9 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const [systemStatus, setSystemStatus] = useState('OFFLINE');
+  const [hasConnected, setHasConnected] = useState(false);
+
   // Form State Control Object (Tracks back-office intake values)
   const [form, setForm] = useState({
     name: '',
@@ -32,15 +35,23 @@ function App() {
         setInventory(data);
         setLoading(false);
         setError(null);
+        setSystemStatus('ONLINE');
+        setHasConnected(true); // Track that we've had at least one good connection
       })
       .catch((err) => {
+        console.warn("Backend server not found yet. Retrying in 5 seconds...");
         setError("Could not connect to back-office storage database.");
         setLoading(false);
+        setSystemStatus('OFFLINE');
       });
   };
 
   useEffect(() => {
     fetchInventory();
+
+    // Poll backend health every 5 seconds
+    const interval = setInterval(fetchInventory, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   // Restock Function: Sends a restock increment request to the backend server
@@ -225,20 +236,38 @@ function App() {
       <nav className="navbar navbar-expand-lg navbar-dark bg-dark py-3 mb-4 shadow-sm">
         <div className="container-fluid px-4">
           <span className="navbar-brand fw-black tracking-wider">
-            <span className="text-warning me-2">⚡</span> LIVE MUSIC <span className="text-white-50 fw-normal ms-2 fs-6">| Back-Office POS</span>
+            <span className="text-warning me-2">⚡</span> LIVE MUSIC <span className="text-white-50 fw-normal ms-2 fs-4">| Back-Office POS</span>
           </span>
-          <div className="navbar-nav ms-auto font-monospace small">
-            <span className="text-white-50">System Status: <span className="text-warning fw-bold">ONLINE</span></span>
-          </div>
+            <div className="navbar-nav ms-auto font-monospace">
+              <span className="d-flex align-items-center gap-2">
+                <span className="text-white-50 small">System Status:</span>
+                {systemStatus === 'ONLINE' && (
+                  <span className="badge bg-success bg-opacity-25 text-success border border-success px-2.5 py-1.5" style={{ fontSize: '0.80rem' }}>
+                    ● ONLINE
+                  </span>
+                )}
+                {(systemStatus === 'OFFLINE') && (
+                  <span className="badge bg-danger bg-opacity-25 text-danger border border-danger px-2.5 py-1.5 d-inline-flex align-items-center gap-2" style={{ fontSize: '0.80rem' }}>
+                    <span className="spinner-border spinner-border-sm" role="status" style={{ width: '0.65rem', height: '0.65rem' }}></span>
+                    OFFLINE
+                  </span>
+                )}
+              </span>
+            </div>
         </div>
       </nav>
 
       <div className="container-fluid px-4">
-        {error ? (
-          <div className="alert alert-danger shadow-sm border-start border-4 border-danger" role="alert">
-            {error}
+        {error && (
+          <div className="alert alert-danger shadow-sm border-start border-4 border-danger d-flex align-items-center justify-content-between mb-4" role="alert">
+            <div>
+              <strong>⚠️ {hasConnected ? 'Connection Lost:' : 'Server Unavailable:'}</strong> {error}
+            </div>
+            <span className="badge bg-danger text-uppercase font-monospace ms-2">
+              Auto-Retrying Every 5s
+            </span>
           </div>
-        ) : (
+        )}
           <div className="row">
             {/* Left Column: Master Live Database Tracking Sheet */}
             <div className="col-12 col-xl-8 mb-4">
@@ -403,7 +432,7 @@ function App() {
               </div>
             </div>
           </div>
-        )}
+
       </div>
     </div>
   );
