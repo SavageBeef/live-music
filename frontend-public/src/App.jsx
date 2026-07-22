@@ -1,21 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ProductCard from './components/ProductCard';
-
-// Import your local asset safely via Vite
-import heroBgImage from './assets/katarina-bubenikova-nUd7uq3i0qs-unsplash.jpg';
+import heroBgImage from './assets/katarina-bubenikova-nUd7uq3i0qs-unsplash.jpg'; // Import your local asset safely via Vite
 
 function App() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]); // Client-side shopping basket
   const [loading, setLoading] = useState(true);
-  // Create a state to store the network error message/status
-  const [errorStatus, setErrorStatus] = useState("Connecting...");
+  const [errorStatus, setErrorStatus] = useState("Connecting..."); // Create a state to store the network error message/status
+  const [isOffline, setIsOffline] = useState(false); // Track if the backend is offline
 
-  // Tracks the component lifespan across re-renders to prevent background thread state memory leaks
-  const isMounted = useRef(true);
+  const isMounted = useRef(true); // Tracks the component lifespan across re-renders to prevent background thread state memory leaks
 
   // Recursive fetching function that handles failures elegantly
-  const connectToBackend = () => {
+  const fetchProducts = () => {
     fetch('http://localhost:5000/api/products')
       .then(res => {
         if (!res.ok) throw new Error("Server responded with an error status: ${res.status}");
@@ -24,19 +21,19 @@ function App() {
       .then(data => {
         if (isMounted.current) {
           setProducts(data);
-          setLoading(false); // Connection successful, turn off loader!
+          setLoading(false);    // Turn off initial screen loader
+          setIsOffline(false); // Connection is active!
           setErrorStatus(null);
         }
       })
       .catch(err => {
-        console.warn("Backend server not found yet. Retrying in 3 seconds...");
+        console.warn("Backend server not found yet. Retrying...");
         if (isMounted.current) {
           setErrorStatus(err.message === "Failed to fetch" 
             ? "ERR_CONNECTION_REFUSED (Backend server is offline)" 
             : err.message
           );
-          // Wait 3 seconds, then try to connect again
-          setTimeout(connectToBackend, 3000);
+          setIsOffline(true); // Mark the backend as offline
         }
       });
   };
@@ -44,20 +41,20 @@ function App() {
   // Initial mount listener fires the connection once and establishes an auto-sync heartbeat
   useEffect(() => {
     isMounted.current = true;
-    connectToBackend();
+    fetchProducts();
     
-    // HEARTBEAT SYNC: Re-query database every 10 seconds to catch staff inventory restocks automatically!
-    const inventorySyncHeartbeat = setInterval(() => {
+    // HEARTBEAT SYNC: Re-query database every 10 seconds
+    const heartbeat = setInterval(() => {
       if (isMounted.current) {
         console.log("🔄 Background Sync: Refreshing showroom inventory tables...");
-        connectToBackend();
+        fetchProducts();
       }
     }, 10000); // 10,000 milliseconds = 10 seconds
 
     // Clean up hook flags and intervals when client disconnects to prevent background processing memory leaks
     return () => {
       isMounted.current = false;
-      clearInterval(inventorySyncHeartbeat); // Safely clear the timer loop!
+      clearInterval(heartbeat); // Safely clear the timer loop!
     };
   }, []);
 
@@ -81,6 +78,26 @@ function App() {
     );
   };
 
+  // Removes/decrements an item from cart and returns stock back to the display grid
+  const handleRemoveFromCart = (productId) => {
+    setCart(prevCart => {
+      const existing = prevCart.find(item => item.id === productId);
+      if (!existing) return prevCart;
+
+      if (existing.quantity > 1) {
+        return prevCart.map(item => 
+          item.id === productId ? { ...item, quantity: item.quantity - 1 } : item
+        );
+      }
+      return prevCart.filter(item => item.id !== productId);
+    });
+
+    // Return 1 unit back to the display stock
+    setProducts(prevProducts => 
+      prevProducts.map(p => p.id === productId ? { ...p, stock: p.stock + 1 } : p)
+    );
+  };
+
   // Finalizes transaction with the backend server database
   const handleCheckout = () => {
     if (cart.length === 0) return;
@@ -101,20 +118,20 @@ function App() {
       .then(() => {
         alert("🎉 Order processed successfully! Backend database inventory decremented.");
         setCart([]); // Clear cart basket
-        connectToBackend(); // Force refresh ground truth stock metrics from DB
+        fetchProducts(); // Force refresh ground truth stock metrics from DB
       })
       .catch(err => {
         alert(err.message);
-        connectToBackend(); // Reset system values safely
+        fetchProducts(); // Reset system values safely
       });
   };
 
-  if (loading) {
+  if (loading && isOffline) {
     return (
       <div className="min-vh-100 bg-dark d-flex flex-column justify-content-center align-items-center text-light">
         <div className="spinner-border text-warning mb-4" style={{ width: '3rem', height: '3rem' }} role="status"></div>
         <h5 className="font-monospace text-warning tracking-wider">TUNING THE INSTRUMENTS...</h5>
-        <p className="text-white-50 small font-monospace mt-1">Waiting for server synchronization</p>
+        <p className="text-white-50 small font-monospace mt-1">Waiting for initial backend synchronization</p>
 
         <div className="text-center p-4 rounded-4 bg-secondary bg-opacity-10 border border-secondary border-opacity-25 shadow-lg" style={{ maxWidth: '440px' }}>
           <span className="badge bg-danger bg-opacity-25 text-danger font-monospace border border-danger border-opacity-25 px-3 py-2 rounded-pill mb-3 small">
@@ -130,7 +147,7 @@ function App() {
           <div className="mt-3 pt-3 border-top border-secondary border-opacity-25">
             <span className="text-white-50 small font-monospace d-flex align-items-center justify-content-center gap-2" style={{ fontSize: '0.8rem' }}>
               <span className="spinner-grow spinner-grow-sm text-warning" role="status"></span>
-              Retrying connection automatically every 3s...
+              Retrying connection automatically...
             </span>
           </div>
         </div>
@@ -148,6 +165,13 @@ function App() {
 
   return (
     <div className="min-vh-100 w-100 pb-5" style={{ backgroundColor: '#faf6ee' }}>
+      {/* Top Banner for Mid-Session Connection Loss */}
+      {isOffline && (
+        <div className="bg-danger text-white py-2 px-4 text-center font-monospace small fw-bold shadow-sm d-flex align-items-center justify-content-center gap-2">
+          <span className="spinner-border spinner-border-sm" role="status"></span>
+          ⚠️ Connection Lost: Showroom is currently in offline mode. Reconnecting to Database...
+        </div>
+      )}
       {/* Premium Navbar */}
       <nav className="navbar navbar-expand-lg navbar-dark bg-dark py-3 border-bottom border-secondary border-opacity-25 shadow-sm">
         <div className="container-fluid px-4">
@@ -168,7 +192,9 @@ function App() {
                 <a className="nav-link px-3 mb-0 text-white-50" href="#">POS Backend</a>
               </div>
               {/* Shopping Session Tracker Badge */}
-              <span className="badge bg-warning text-dark font-monospace px-3 py-2 rounded-pill shadow-sm d-flex align-items-center justify-content-center fw-bold">
+              <span className={`badge font-monospace px-3 py-2 rounded-pill shadow-sm d-flex align-items-center justify-content-center fw-bold ${
+                isOffline ? 'bg-secondary text-white' : 'bg-warning text-dark'
+              }`}>
                 🛒 Cart ({cart.reduce((sum, item) => sum + item.quantity, 0)})
               </span> 
             </div>
@@ -201,7 +227,7 @@ function App() {
         </div>
       </header>
 
-      {/* Main Catalog Grid */}
+      {/* Main Product Grid */}
       <main className="container">
         <div className="row justify-content-start">
           {products.length > 0 ? (
@@ -224,19 +250,31 @@ function App() {
               <h5 className="mb-1 text-warning fw-bold font-monospace">SHOPPING SESSION SELECTION</h5>
               <div className="d-flex gap-3 text-white-50 small flex-wrap">
                 {cart.map(item => (
-                  <span key={item.id} className="bg-secondary bg-opacity-25 px-2 py-1 rounded">
-                    {item.name} (x{item.quantity})
+                  <span key={item.id} className="bg-secondary bg-opacity-25 border border-secondary border-opacity-25 px-3 py-1 rounded-3 d-inline-flex align-items-center gap-2">
+                    <span className="text-white font-monospace">{item.name} (x{item.quantity})</span>
+                    <button 
+                      type="button" 
+                      onClick={() => handleRemoveFromCart(item.id)}
+                      className="btn btn-sm btn-outline-warning p-0 px-1.5 rounded-circle line-height-1 small"
+                      style={{ width: '20px', height: '20px', lineHeight: '14px', fontSize: '12px' }}
+                      title="Remove 1 unit"
+                    >
+                      −
+                    </button>
                   </span>
                 ))}
               </div>
             </div>
-            <button onClick={handleCheckout} className="btn btn-warning text-dark fw-bold px-5 py-2 rounded-pill shadow">
-              Proceed to Checkout (${cart.reduce((sum, item) => sum + (item.price * item.quantity), 0).toLocaleString()})
+            <button 
+              onClick={handleCheckout} 
+              disabled={isOffline}
+              className={`btn ${isOffline ? 'btn-secondary text-white' : 'btn-warning text-dark'} fw-bold px-5 py-2 rounded-pill shadow`}
+            >
+              {isOffline ? "Server Offline" : `Proceed to Checkout ($${cart.reduce((sum, item) => sum + (item.price * item.quantity), 0).toLocaleString()})`}
             </button>
           </div>
         </div>
       )}
-
     </div>
   );
 }
