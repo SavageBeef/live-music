@@ -4,11 +4,13 @@ The core server is a lightweight Express gateway designed to execute atomic tran
 
 ---
 
-## 💾 In-Memory Data Modeling
-During phase-one development, the system evaluates states using a volatile in-memory SQLite stack initialization. The relational schema is defined as:
+## 💾 Persistent SQLite Data Architecture
+The backend utilizes disk-based SQLite file storage (e.g., `live_music.db`) to ensure inventory records, pricing updates, stock counts, and product details persist across server restarts and deployments. 
+
+Upon server startup, the database driver initializes the persistent file connection and runs a defensive schema setup query to ensure the table structure exists before serving API routes:
 
 ```sql
-CREATE TABLE products (
+CREATE TABLE IF NOT EXISTS products (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT,
     brand TEXT,
