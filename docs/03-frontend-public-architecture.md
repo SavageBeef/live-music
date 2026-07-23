@@ -4,10 +4,12 @@ The `frontend-public` application provides a clean, responsive, read-only e-comm
 
 ---
 
-## 🔄 Architectural Scope: The "R" in CRUD
-To maintain operational safety, the customer-facing interface has no direct data mutation capabilities. It interfaces exclusively with read vectors:
-*   **Data Ingestion:** Hits `GET http://localhost:5000/api/products` on component mounting to paint the digital showroom floor.
-*   **Isolated Business Logic:** Includes consumer interactions like item filtering, feature searches, and cart additions. No administrative payloads are exposed to this viewport.
+## 🔄 Architectural Scope: Read-Focused Showroom
+To maintain operational safety and align with Phase 3 milestones, the public interface operates primarily around read vectors and local UI session state:
+
+*   **Data Ingestion:** Hits `GET http://localhost:5000/api/products` on component mounting and via background heartbeat intervals to paint the digital showroom floor.
+*   **Isolated Business Logic:** Manages local consumer interactions including stock calculations, UI alerts, and client-side shopping cart state without administrative access.
+*   **Phase 4 Preview (Provisional Stub):** Includes a basic client-side checkout prototype (`handleCheckout`) preparing the UI for full transactional integration in Phase 4.
 
 ---
 
@@ -22,8 +24,19 @@ The display engine shows live instrument data through an asset-focused layout:
 
 ---
 
-## 🛡️ Resilient Connection Processing
-To safeguard user experiences against service interruptions, the client uses an automatic error intercept loop:
-1. If the API gateway goes offline, the public UI captures the request failure gracefully and displays clean technical diagnostics.
-2. Background loops poll the network connection to locate service restoration events.
-3. The live interface re-seeds the layout automatically the instant the server boots back online, eliminating manual page refreshes.
+## 🛡️ Resilient Connection Processing & Dual-Mode UI
+To safeguard user experiences against service interruptions, the client implements an automated connection monitor:
+
+1. **Heartbeat Polling Loop:** An active `setInterval` loop queries `GET /api/products` every 10 seconds to detect server state changes automatically.
+2. **Dual-Tier UI Strategy:**
+   * **Initial Boot Failure:** Displays a full-screen blocking loader screen ("TUNING THE INSTRUMENTS...") when initial database contact cannot be made.
+   * **Mid-Session Connection Drop:** Renders a non-blocking top danger alert banner (`⚠️ Connection Lost`) if the server drops mid-session, leaving already loaded showroom items readable.
+3. **Dynamic Network Binding:** Interactive controls (Checkout action button and Navbar Cart Badge) listen directly to the `isOffline` state, dynamically toggling Bootstrap classes (`bg-warning` vs. `bg-secondary`) and setting `disabled` guards when the API gateway is offline.
+
+---
+
+## 🧹 Lifecycle & Memory Safety (`isMounted` Pattern)
+To prevent background thread memory leaks when components unmount during active network requests:
+* An `isMounted` mutable reference (`useRef(true)`) tracks component lifespan.
+* Async fetch callbacks verify `isMounted.current === true` prior to executing state dispatchers (`setProducts`, `setIsOffline`, `setErrorStatus`).
+* The `useEffect` cleanup return phase sets `isMounted.current = false` and safely terminates active `setInterval` timers.

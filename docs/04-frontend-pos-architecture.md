@@ -52,3 +52,22 @@ HTML `<input type="file" />` elements cannot be driven directly by React's stand
 ```javascript
 document.getElementById('productImageInput').value = ''; // Wipes file label state cleanly
 ```
+
+---
+
+## 📡 Real-Time Health Diagnostics & Heartbeat
+The Back-Office POS tracks active network status using a dual-state diagnostic framework:
+
+* **Heartbeat Interval:** Queries `GET /api/products` every 5 seconds to verify server health and refresh live inventory ledgers.
+* **State Categorization:**
+  * `systemStatus` (`ONLINE` | `OFFLINE`): Controls the navbar status badge indicator.
+  * `hasConnected` (Boolean): Distinguishes whether an outage is an initial connection failure ("Server Unavailable") or a mid-session loss ("Connection Lost").
+
+---
+
+## 🖼️ Unified Image Asset Preview Engine
+The intake panel supports both new local file selections and existing database assets through a unified preview container:
+
+* **Draft Selection:** When a staff member picks a new image file, `URL.createObjectURL()` creates a temporary browser RAM preview URL for instant rendering.
+* **Database Asset Display:** When editing an existing product (`editingId !== null`), the container falls back to rendering the saved remote image string (`form.image_url`).
+* **Memory Cleanup:** Executing a form reset, switching edit targets, or cancelling an operation triggers `URL.revokeObjectURL()` to free browser RAM and resets uncontrolled DOM `<input type="file" />` values to eliminate memory leaks.
