@@ -22,6 +22,10 @@ const db = new sqlite3.Database(dbPath, (err) => {
 // Create schema and safely seed if table is vacant
 function initializeDatabase() {
     db.serialize(() => {
+        // Enable Foreign Key enforcement in SQLite (Disabled by default)
+        db.run('PRAGMA foreign_keys = ON;');
+
+        // Catalog Schema Definition: Products Table
         db.run(`CREATE TABLE IF NOT EXISTS products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT,
@@ -90,6 +94,29 @@ function initializeDatabase() {
                 console.log(`ℹ️ Persistent database contains ${row.count} records. Skipping seeding sequence.`);
             }
         });
+
+        // Sales Ledger Schema Definition: Sales Table (Tracks transaction timestamp and total)
+        db.run(`
+            CREATE TABLE IF NOT EXISTS sales (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                total_amount REAL NOT NULL,
+                transaction_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // Itemized Sales Details Schema Definition: Sale Items Table (Links specific products and prices to a sale)
+        db.run(`
+            CREATE TABLE IF NOT EXISTS sale_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sale_id INTEGER NOT NULL,
+                product_id INTEGER NOT NULL,
+                quantity INTEGER NOT NULL,
+                unit_price REAL NOT NULL,
+                FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE,
+                FOREIGN KEY (product_id) REFERENCES products(id)
+            );
+        `);
+
     });
 }
 

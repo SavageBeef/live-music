@@ -70,6 +70,85 @@ app.post('/api/pos/sell', (req, res) => {
     );
 });
 
+// Atomic Checkout Route Handler: Processes a batch of sales in a single transaction (UPDATE Operation)
+app.post('/api/checkout', (req,res) => {
+    const { items } = req.body; // Expects array: [{ id: 1, quantity: 2, price: 1299.00 }, ...]
+    if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: "Checkout payload must contain an array of items." });
+    }
+
+    // Calculate total amount across all cart items
+    const totalAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+    db.serialize(() => {
+        db.run("BEGIN TRANSACTION");
+
+        // Step 1: Create sale record header
+        db.run("INSERT INTO sales (total_amount) VALUES (?)", [totalAmount], function (err) {
+            if (err) {
+                db.run("ROLLBACK");
+                return res.status(500).json({ error: "Failed to record transaction header.", details: err.message });
+            }
+
+            const saleId = this.lastID; // ID of the newly created sale row
+
+            // Step 2: Map each item to a Promise that records the line item and deducts stock
+            const itemPromises = items.map((item) => {
+                return new Promise((resolve, reject) => {
+                    // Record line item
+                    db.run(
+                        "INSERT INTO sale_items (sale_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?)",
+                        [saleId, item.id, item.quantity, item.price],
+                        (itemErr) => {
+                            if (itemErr) return reject(itemErr);
+
+                            // Deduct stock safely (WHERE stock >= quantity prevents negative stock)
+                            db.run(
+                                "UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?",
+                                [item.quantity, item.id, item.quantity],
+                                function (stockErr) {
+                                    if (stockErr) return reject(stockErr);
+                                    
+                                    // NOTE: sqlite3 binds 'this.changes' to traditional callbacks
+                                    if (this.changes === 0) {
+                                        return reject(new Error(`Insufficient stock or invalid product ID: ${item.id}`));
+                                    }
+                                    
+                                    resolve(); // Item successfully recorded and stock deducted
+                                }
+                            );
+                        }
+                    );
+                });
+            });
+
+            // Step 3: Wait for ALL item operations to complete before deciding to Commit or Rollback
+            Promise.all(itemPromises)
+                .then(() => {
+                    db.run("COMMIT", (commitErr) => {
+                        if (commitErr) {
+                            db.run("ROLLBACK");
+                            return res.status(500).json({ error: "Failed to commit transaction." });
+                        }
+                        return res.status(201).json({
+                            message: "Transaction completed successfully!",
+                            saleId: saleId,
+                            totalAmount: totalAmount
+                        });
+                    });
+                })
+                .catch((error) => {
+                    // If ANY item fails stock check or insert, roll back the entire transaction!
+                    db.run("ROLLBACK");
+                    return res.status(400).json({ 
+                        error: "Checkout failed. Insufficient stock or invalid item.",
+                        details: error.message 
+                    });
+                });
+        });
+    });
+});
+
 // Restock Endpoint: Increases the stock of a product in the database (UPDATE Operation)
 app.post('/api/pos/restock', (req, res) => {
   const { id, quantity } = req.body;
