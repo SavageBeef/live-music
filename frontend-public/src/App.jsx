@@ -8,6 +8,8 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [errorStatus, setErrorStatus] = useState("Connecting..."); // Create a state to store the network error message/status
   const [isOffline, setIsOffline] = useState(false); // Track if the backend is offline
+  const [submitting, setSubmitting] = useState(false); // Controls loading indicator during checkout
+  const [isCartOpen, setIsCartOpen] = useState(false); // Toggles the cart drawer modal/offcanvas
 
   const isMounted = useRef(true); // Tracks the component lifespan across re-renders to prevent background thread state memory leaks
 
@@ -58,7 +60,7 @@ function App() {
     };
   }, []);
 
-  // Simulates adding items to a local checkout batch session
+  // Adds an item to cart and adjusts display stock temporarily
   const handleAddToCart = (selectedProduct) => {
     // 1. Prevent adding if frontend reflects no temporary stock remaining
     if (selectedProduct.stock <= 0) return;
@@ -78,53 +80,94 @@ function App() {
     );
   };
 
-  // Removes/decrements an item from cart and returns stock back to the display grid
-  const handleRemoveFromCart = (productId) => {
-    setCart(prevCart => {
-      const existing = prevCart.find(item => item.id === productId);
-      if (!existing) return prevCart;
+  // Adjusts quantity (+1 or -1) directly inside the Cart Drawer
+  const handleUpdateQuantity = (productId, delta) => {
+    const cartItem = cart.find(item => item.id === productId);
+    if (!cartItem) return;
 
-      if (existing.quantity > 1) {
-        return prevCart.map(item => 
+    if (delta > 0) {
+      // Check if product display grid still has stock available to claim
+      const productInGrid = products.find(p => p.id === productId);
+      if (!productInGrid || productInGrid.stock <= 0) return;
+
+      setCart(prev => prev.map(item => 
+        item.id === productId ? { ...item, quantity: item.quantity + 1 } : item
+      ));
+      setProducts(prev => prev.map(p => 
+        p.id === productId ? { ...p, stock: p.stock - 1 } : p
+      ));
+    } else if (delta < 0) {
+      if (cartItem.quantity === 1) {
+        handleRemoveFromCart(productId);
+      } else {
+        setCart(prev => prev.map(item => 
           item.id === productId ? { ...item, quantity: item.quantity - 1 } : item
-        );
+        ));
+        setProducts(prev => prev.map(p => 
+          p.id === productId ? { ...p, stock: p.stock + 1 } : p
+        ));
       }
-      return prevCart.filter(item => item.id !== productId);
-    });
+    }
+  };
 
-    // Return 1 unit back to the display stock
+  // Completely removes an item line from cart and returns entire allocated stock to display grid
+  const handleRemoveFromCart = (productId) => {
+    const cartItem = cart.find(item => item.id === productId);
+    if (!cartItem) return;
+
+    setCart(prevCart => prevCart.filter(item => item.id !== productId));
+
+    // Return all claimed units back to display stock
     setProducts(prevProducts => 
-      prevProducts.map(p => p.id === productId ? { ...p, stock: p.stock + 1 } : p)
+      prevProducts.map(p => p.id === productId ? { ...p, stock: p.stock + cartItem.quantity } : p)
     );
   };
 
-  // Finalizes transaction with the backend server database
-  const handleCheckout = () => {
-    if (cart.length === 0) return;
+  // Executes an atomic checkout via POST /api/checkout
+  const handleCheckout = async () => {
+    if (cart.length === 0 || isOffline || submitting) return;
 
-    // Send transaction processing payloads sequentially or batched
-    const promises = cart.map(item => 
-      fetch('http://localhost:5000/api/pos/sell', {
+    setSubmitting(true);
+
+    try {
+      // Structure payload for POST /api/checkout
+      const payload = {
+        items: cart.map(item => ({
+          id: item.id,
+          quantity: item.quantity,
+          price: item.price
+        }))
+      };
+
+      const response = await fetch('http://localhost:5000/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: item.id, quantity: item.quantity })
-      }).then(res => {
-        if (!res.ok) throw new Error(`Failed checkout for item: ${item.name}`);
-        return res.json();
-      })
-    );
-
-    Promise.all(promises)
-      .then(() => {
-        alert("🎉 Order processed successfully! Backend database inventory decremented.");
-        setCart([]); // Clear cart basket
-        fetchProducts(); // Force refresh ground truth stock metrics from DB
-      })
-      .catch(err => {
-        alert(err.message);
-        fetchProducts(); // Reset system values safely
+        body: JSON.stringify(payload)
       });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        // Displays exact rejection reason from backend (e.g. "Insufficient stock or invalid product ID: 1")
+        throw new Error(data.details || data.error || "Checkout failed.");
+      }
+
+      // Success
+      alert(`🎉 ${data.message}\nSale #${data.saleId} | Total: $${data.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`);
+      
+      setCart([]);
+      setIsCartOpen(false);
+      fetchProducts(); // Refresh real database state
+    } catch (err) {
+      alert(`⚠️ Transaction Rejected:\n${err.message}`);
+      fetchProducts(); // Re-sync local stock state with DB after rollback
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  const totalCartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const totalCartPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
   if (loading && isOffline) {
     return (
@@ -191,12 +234,15 @@ function App() {
                 <a className="nav-link active px-3 text-warning mb-0" href="#">Showroom</a>
                 <a className="nav-link px-3 mb-0 text-white-50" href="#">POS Backend</a>
               </div>
-              {/* Shopping Session Tracker Badge */}
-              <span className={`badge font-monospace px-3 py-2 rounded-pill shadow-sm d-flex align-items-center justify-content-center fw-bold ${
-                isOffline ? 'bg-secondary text-white' : 'bg-warning text-dark'
-              }`}>
-                🛒 Cart ({cart.reduce((sum, item) => sum + item.quantity, 0)})
-              </span> 
+              {/* Clickable Cart Button */}
+              <button 
+                onClick={() => setIsCartOpen(true)}
+                className={`btn font-monospace px-3 py-2 rounded-pill shadow-sm d-flex align-items-center justify-content-center fw-bold border-0 ${
+                  isOffline ? 'btn-secondary text-white' : 'btn-warning text-dark'
+                }`}
+              >
+                🛒 Cart <span className="badge bg-dark text-warning ms-2 rounded-pill">{totalCartCount}</span>
+              </button> 
             </div>
           </div>
         </div>
@@ -242,39 +288,160 @@ function App() {
         </div>
       </main>
 
-      {/* Persistent Shopping Cart Summary Bar */}
+      {/* Persistent Bottom Action Bar */}
       {cart.length > 0 && (
-        <div className="fixed-bottom bg-dark text-white p-4 shadow-lg border-top border-secondary border-opacity-50 z-3">
+        <div className="fixed-bottom bg-dark text-white p-3 shadow-lg border-top border-secondary border-opacity-50 z-3">
           <div className="container d-flex flex-wrap justify-content-between align-items-center gap-3">
             <div>
-              <h5 className="mb-1 text-warning fw-bold font-monospace">SHOPPING SESSION SELECTION</h5>
-              <div className="d-flex gap-3 text-white-50 small flex-wrap">
-                {cart.map(item => (
-                  <span key={item.id} className="bg-secondary bg-opacity-25 border border-secondary border-opacity-25 px-3 py-1 rounded-3 d-inline-flex align-items-center gap-2">
-                    <span className="text-white font-monospace">{item.name} (x{item.quantity})</span>
-                    <button 
-                      type="button" 
-                      onClick={() => handleRemoveFromCart(item.id)}
-                      className="btn btn-sm btn-outline-warning p-0 px-1.5 rounded-circle line-height-1 small"
-                      style={{ width: '20px', height: '20px', lineHeight: '14px', fontSize: '12px' }}
-                      title="Remove 1 unit"
-                    >
-                      −
-                    </button>
-                  </span>
-                ))}
-              </div>
+              <span className="text-warning fw-bold font-monospace small d-block">ACTIVE CART SESSION</span>
+              <span className="fs-5 fw-bold font-monospace text-white">
+                {totalCartCount} {totalCartCount === 1 ? 'Item' : 'Items'} — ${totalCartPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </span>
             </div>
-            <button 
-              onClick={handleCheckout} 
-              disabled={isOffline}
-              className={`btn ${isOffline ? 'btn-secondary text-white' : 'btn-warning text-dark'} fw-bold px-5 py-2 rounded-pill shadow`}
-            >
-              {isOffline ? "Server Offline" : `Proceed to Checkout ($${cart.reduce((sum, item) => sum + (item.price * item.quantity), 0).toLocaleString()})`}
-            </button>
+
+            <div className="d-flex gap-2">
+              <button 
+                onClick={() => setIsCartOpen(true)}
+                className="btn btn-outline-light fw-bold px-4 py-2 rounded-pill font-monospace"
+              >
+                Review Cart
+              </button>
+              <button 
+                onClick={handleCheckout} 
+                disabled={isOffline || submitting}
+                className={`btn ${isOffline ? 'btn-secondary text-white' : 'btn-warning text-dark'} fw-bold px-4 py-2 rounded-pill font-monospace shadow d-flex align-items-center gap-2`}
+              >
+                {submitting ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm" role="status"></span>
+                    Processing...
+                  </>
+                ) : isOffline ? (
+                  "Server Offline"
+                ) : (
+                  `Pay $${totalCartPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
+
+      {/* Slide-out Cart Modal / Drawer Overlay */}
+      {isCartOpen && (
+        <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 1050 }}>
+          <div className="modal-dialog modal-dialog-scrollable modal-lg modal-dialog-centered">
+            <div className="modal-content bg-dark text-white border border-secondary border-opacity-50 rounded-4 shadow-lg">
+              
+              {/* Drawer Header */}
+              <div className="modal-header border-bottom border-secondary border-opacity-25 px-4 py-3">
+                <h5 className="modal-title font-monospace text-warning fw-bold d-flex align-items-center gap-2">
+                  <span>🛒</span> CHECKOUT BASKET
+                </h5>
+                <button 
+                  type="button" 
+                  className="btn-close btn-close-white" 
+                  onClick={() => setIsCartOpen(false)}
+                ></button>
+              </div>
+
+              {/* Drawer Body */}
+              <div className="modal-body px-4 py-3">
+                {cart.length === 0 ? (
+                  <div className="text-center py-5">
+                    <p className="text-white-50 font-monospace mb-0">Your shopping basket is empty.</p>
+                  </div>
+                ) : (
+                  <div className="table-responsive">
+                    <table className="table table-dark table-hover align-middle mb-0">
+                      <thead className="text-warning font-monospace small">
+                        <tr>
+                          <th>ITEM</th>
+                          <th className="text-center">PRICE</th>
+                          <th className="text-center">QTY</th>
+                          <th className="text-end">SUBTOTAL</th>
+                          <th className="text-center"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cart.map(item => (
+                          <tr key={item.id}>
+                            <td className="fw-bold font-monospace">{item.name}</td>
+                            <td className="text-center font-monospace">${item.price.toFixed(2)}</td>
+                            <td className="text-center">
+                              <div className="d-inline-flex align-items-center gap-2 bg-secondary bg-opacity-25 px-2 py-1 rounded-pill border border-secondary border-opacity-25">
+                                <button 
+                                  onClick={() => handleUpdateQuantity(item.id, -1)}
+                                  className="btn btn-sm btn-outline-warning p-0 px-2 rounded-circle"
+                                  style={{ lineHeight: '1' }}
+                                >
+                                  −
+                                </button>
+                                <span className="font-monospace fw-bold px-1">{item.quantity}</span>
+                                <button 
+                                  onClick={() => handleUpdateQuantity(item.id, 1)}
+                                  className="btn btn-sm btn-outline-warning p-0 px-2 rounded-circle"
+                                  style={{ lineHeight: '1' }}
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </td>
+                            <td className="text-end font-monospace fw-bold text-warning">
+                              ${(item.price * item.quantity).toFixed(2)}
+                            </td>
+                            <td className="text-center">
+                              <button 
+                                onClick={() => handleRemoveFromCart(item.id)}
+                                className="btn btn-sm btn-outline-danger border-0 rounded-circle"
+                                title="Delete item"
+                              >
+                                🗑️
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Drawer Footer */}
+              {cart.length > 0 && (
+                <div className="modal-footer border-top border-secondary border-opacity-25 px-4 py-3 d-flex justify-content-between align-items-center">
+                  <div>
+                    <span className="text-white-50 font-monospace small d-block">TOTAL AMOUNT DUE</span>
+                    <span className="fs-3 font-monospace fw-bold text-warning">
+                      ${totalCartPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+
+                  <div className="d-flex gap-2">
+                    <button 
+                      type="button" 
+                      className="btn btn-outline-light font-monospace rounded-pill px-4"
+                      onClick={() => setIsCartOpen(false)}
+                    >
+                      Close
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={handleCheckout}
+                      disabled={isOffline || submitting}
+                      className="btn btn-warning text-dark font-monospace fw-bold rounded-pill px-5 shadow"
+                    >
+                      {submitting ? "Processing Transaction..." : "Complete Purchase"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
