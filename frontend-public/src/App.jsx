@@ -4,7 +4,16 @@ import heroBgImage from './assets/katarina-bubenikova-nUd7uq3i0qs-unsplash.jpg';
 
 function App() {
   const [products, setProducts] = useState([]);
-  const [cart, setCart] = useState([]); // Client-side shopping basket
+  const [cart, setCart] = useState(() => {
+    try {
+      const savedCart = localStorage.getItem('live_music_cart');
+      return savedCart ? JSON.parse(savedCart) : [];
+    } 
+    catch (err) {
+      console.error("Failed to load cart from localStorage", err);
+      return [];
+    } 
+  });
   const [loading, setLoading] = useState(true);
   const [errorStatus, setErrorStatus] = useState("Connecting..."); // Create a state to store the network error message/status
   const [isOffline, setIsOffline] = useState(false); // Track if the backend is offline
@@ -12,8 +21,9 @@ function App() {
   const [isCartOpen, setIsCartOpen] = useState(false); // Toggles the cart drawer modal/offcanvas
 
   const isMounted = useRef(true); // Tracks the component lifespan across re-renders to prevent background thread state memory leaks
+  const cartRef = useRef(cart); // Track cart in a ref so background heartbeat sync always reads the latest cart state
 
-  // Recursive fetching function that handles failures elegantly
+  // Synchronizes product catalog and reconciles DB stock with local cart
   const fetchProducts = () => {
     fetch('http://localhost:5000/api/products')
       .then(res => {
@@ -22,6 +32,17 @@ function App() {
       })
       .then(data => {
         if (isMounted.current) {
+          // Reconcile database stock against active local cart quantities
+          const reconciledProducts = data.map(product => {
+            const inCart = cartRef.current.find(item => item.id === product.id);
+            const cartQty = inCart ? inCart.quantity : 0;
+            return {
+              ...product,
+              stock: Math.max(0, product.stock - cartQty)
+            };
+          });
+
+          setProducts(reconciledProducts);
           setProducts(data);
           setLoading(false);    // Turn off initial screen loader
           setIsOffline(false); // Connection is active!
@@ -39,6 +60,12 @@ function App() {
         }
       });
   };
+
+  // Sync cart state to localStorage & keep cartRef updated
+  useEffect(() => {
+    cartRef.current = cart;
+    localStorage.setItem('live_music_cart', JSON.stringify(cart));
+  }, [cart]);
 
   // Initial mount listener fires the connection once and establishes an auto-sync heartbeat
   useEffect(() => {
@@ -156,6 +183,7 @@ function App() {
       alert(`🎉 ${data.message}\nSale #${data.saleId} | Total: $${data.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`);
       
       setCart([]);
+      localStorage.removeItem('live_music_cart'); // Clear persisted cart storage
       setIsCartOpen(false);
       fetchProducts(); // Refresh real database state
     } catch (err) {
