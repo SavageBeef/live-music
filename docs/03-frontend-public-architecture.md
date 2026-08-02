@@ -1,15 +1,62 @@
 # 03. Frontend Public Showroom Architecture
 
-The `frontend-public` application provides a clean, responsive, read-only e-commerce experience tailored for real-time customer browsing.
+The `frontend-public` application provides a clean, responsive, interactive e-commerce experience tailored for real-time customer browsing, persistent session cart management, and atomic transaction processing.
 
 ---
 
-## 🔄 Architectural Scope: Read-Focused Showroom
-To maintain operational safety and align with Phase 3 milestones, the public interface operates primarily around read vectors and local UI session state:
+## 🔄 Architectural Scope & Transactional Integration
+The public interface operates around read vectors, persistent local session state, and single-payload atomic checkout execution:
 
-*   **Data Ingestion:** Hits `GET http://localhost:5000/api/products` on component mounting and via background heartbeat intervals to paint the digital showroom floor.
-*   **Isolated Business Logic:** Manages local consumer interactions including stock calculations, UI alerts, and client-side shopping cart state without administrative access.
-*   **Phase 4 Preview (Provisional Stub):** Includes a basic client-side checkout prototype (`handleCheckout`) preparing the UI for full transactional integration in Phase 4.
+*   **Data Ingestion & Ground-Truth Synchronization:** Queries `GET http://localhost:5000/api/products` on component mount and via automated background heartbeat intervals to populate showroom inventory.
+*   **Persistent Client Session State:** Leverages browser `localStorage` to preserve active cart sessions across page refreshes and browser restarts.
+*   **Real-Time Stock Reconciliation Engine:** Reconciles incoming database stock counts against active local cart items (`cartRef`) so background polling does not override local item reservations.
+*   **Atomic Checkout Processing:** Executes transactions via a single `POST /api/checkout` request containing full basket payloads (`{ items: [{ id, quantity, price }] }`), handling transaction receipts and atomic rollback rejections cleanly.
+
+---
+
+## 💾 Session Persistence & Inventory Reconciliation
+
+### 1. Lazy `localStorage` Synchronization
+The shopping basket state is lazy-initialized on startup from `localStorage` (`live_music_cart`). An explicit `useEffect` syncs updates back to disk whenever cart contents change, while `handleCheckout` purges the key upon successful transaction completion:
+
+```javascript
+const [cart, setCart] = useState(() => {
+  try {
+    const savedCart = localStorage.getItem('live_music_cart');
+    return savedCart ? JSON.parse(savedCart) : [];
+  } catch (err) {
+    console.error("Failed to load saved cart:", err);
+    return [];
+  }
+});
+```
+
+### 2. Live Stock Reconciliation (`data.map`)
+To prevent background heartbeat syncs (10-second interval) from overwriting local cart reservations with raw database totals, `fetchProducts` reconciles ground-truth database rows against active local cart quantities using a persistent `cartRef` (`useRef(cart)`):
+
+```javascript
+const reconciledProducts = data.map(product => {
+  const inCart = cartRef.current.find(item => item.id === product.id);
+  const cartQty = inCart ? inCart.quantity : 0;
+  return {
+    ...product,
+    stock: Math.max(0, product.stock - cartQty)
+  };
+});
+```
+
+---
+
+## 🛒 Checkout Basket & Cart Drawer Interface
+
+The client features a dual-tier cart interaction model:
+
+*   **Persistent Bottom Action Bar:** Displays when `cart.length > 0`, rendering aggregate item totals, live dollar sub-totals, a modal drawer toggle ("Review Cart"), and a direct payment button.
+*   **Itemized Cart Drawer Modal (`isCartOpen`):** An interactive modal table offering:
+    *   Incremental unit controls (`+` / `−`) managed via `handleUpdateQuantity()`.
+    *   Line-item eviction controls via `handleRemoveFromCart()`.
+    *   Dynamic subtotal calculations per item row and grand total summaries.
+*   **Submission Guard (`submitting`):** Disables checkout triggers and displays a loading spinner during active network requests to eliminate duplicate transaction submissions.
 
 ---
 
@@ -20,7 +67,7 @@ The display engine shows live instrument data through an asset-focused layout:
 *   **Dynamic Inventory Badging:** Tracks stock volume values conditionally to adapt user options:
     *   `stock > 0`: Displays available item totals along with an active gold-accented "Add to Cart" button.
     *   `stock === 0`: Disables the button, updates classes to a muted design, and stamps a red "Sold Out" warning overlay.
-*   **Static Resource Streaming:** Strips away external asset host needs by pointing image source targets directly at the backend server directory paths (`product.image_url`).
+*   **Static Resource Streaming:** Strips away external asset host needs by pointing image source targets directly at backend server directory paths (`product.image_url`).
 
 ---
 
@@ -31,7 +78,7 @@ To safeguard user experiences against service interruptions, the client implemen
 2. **Dual-Tier UI Strategy:**
    * **Initial Boot Failure:** Displays a full-screen blocking loader screen ("TUNING THE INSTRUMENTS...") when initial database contact cannot be made.
    * **Mid-Session Connection Drop:** Renders a non-blocking top danger alert banner (`⚠️ Connection Lost`) if the server drops mid-session, leaving already loaded showroom items readable.
-3. **Dynamic Network Binding:** Interactive controls (Checkout action button and Navbar Cart Badge) listen directly to the `isOffline` state, dynamically toggling Bootstrap classes (`bg-warning` vs. `bg-secondary`) and setting `disabled` guards when the API gateway is offline.
+3. **Dynamic Network Binding:** Interactive controls (Checkout action buttons and Navbar Cart Badge) listen directly to the `isOffline` state, dynamically toggling Bootstrap styling (`btn-warning` vs. `btn-secondary`) and setting `disabled` guards when the API gateway is offline.
 
 ---
 
