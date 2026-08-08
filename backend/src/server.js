@@ -149,6 +149,44 @@ app.post('/api/checkout', (req,res) => {
     });
 });
 
+// Sales History Route Handler: Retrieves all sales records along with their line items (READ Operation)
+app.get('/api/sales', (req, res) => {
+    const query = `
+        SELECT s.id AS sale_id, s.total_amount, s.transaction_time, si.product_id, si.quantity, si.unit_price, p.name AS product_name
+        FROM sales s
+        LEFT JOIN sale_items si ON s.id = si.sale_id
+        LEFT JOIN products p ON si.product_id = p.id
+        ORDER BY s.transaction_time DESC, s.id DESC;
+        `;
+
+    db.all(query, [], (err, rows) => {
+        if (err) return res.status(500).json({ error: "Failed to retrieve sales records.", details: err.message });
+
+        // Group the flat result set into a structured format: each sale with its associated items
+        const salesMap = {};
+        rows.forEach(row => {
+            if (!salesMap[row.sale_id]) {
+                salesMap[row.sale_id] = {
+                    id: row.sale_id,
+                    total_amount: row.total_amount,
+                    transaction_time: row.transaction_time || new Date().toISOString(),
+                    items: []
+                };
+            }
+            if (row.product_id) {
+                salesMap[row.sale_id].items.push({
+                    product_id: row.product_id,
+                    name: row.product_name || "Discontinued / Unknown Product",
+                    quantity: row.quantity,
+                    unit_price: row.unit_price
+                });
+            }
+        });
+
+        res.json(Object.values(salesMap));
+    });
+})
+
 // Restock Endpoint: Increases the stock of a product in the database (UPDATE Operation)
 app.post('/api/pos/restock', (req, res) => {
   const { id, quantity } = req.body;
