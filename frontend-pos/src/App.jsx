@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import SalesHistory from './components/SalesHistory';
 
 function App() {
   const [inventory, setInventory] = useState([]);
@@ -23,6 +24,8 @@ function App() {
 
   const [editingId, setEditingId] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
+
+  const [activeView, setActiveView] = useState('inventory'); // 'inventory' | 'sales'
 
   // Fetch the full catalog including out-of-stock items
   const fetchInventory = () => {
@@ -239,8 +242,20 @@ function App() {
             <span className="text-warning me-2">⚡</span> LIVE MUSIC <span className="text-white-50 fw-normal ms-2 fs-4">| Back-Office POS</span>
           </span>
             <div className="navbar-nav ms-auto font-monospace">
+                <button 
+                  onClick={() => setActiveView('inventory')} 
+                  className={`nav-link btn btn-link text-decoration-none px-3 mb-0 border-0 ${activeView === 'inventory' ? 'text-warning fw-bold' : 'text-white-50'}`}
+                >
+                  📦 Inventory & Intake
+                </button>
+                <button
+                  onClick={() => setActiveView('sales')}
+                  className={`nav-link btn btn-link text-decoration-none px-3 mb-0 border-0 ${activeView === 'sales' ? 'text-warning fw-bold' : 'text-white-50'}`}
+                >
+                  📊 Sales History
+                </button>
               <span className="d-flex align-items-center gap-2">
-                <span className="text-white-50 small">System Status:</span>
+                <span className="text-white-50 small">| System Status:</span>
                 {systemStatus === 'ONLINE' && (
                   <span className="badge bg-success bg-opacity-25 text-success border border-success px-2.5 py-1.5" style={{ fontSize: '0.80rem' }}>
                     ● ONLINE
@@ -268,6 +283,8 @@ function App() {
             </span>
           </div>
         )}
+          
+        {activeView === 'inventory' ? (
           <div className="row">
             {/* Left Column: Master Live Database Tracking Sheet */}
             <div className="col-12 col-xl-8 mb-4">
@@ -432,6 +449,10 @@ function App() {
               </div>
             </div>
           </div>
+        ) : (
+          /* Sales Ledger & Receipts */
+          <SalesHistory isOffline={systemStatus === 'OFFLINE'} />
+        )}
 
       </div>
     </div>
