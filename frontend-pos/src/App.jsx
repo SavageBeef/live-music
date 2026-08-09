@@ -285,167 +285,243 @@ function App() {
         )}
           
         {activeView === 'inventory' ? (
-          <div className="row">
-            {/* Left Column: Master Live Database Tracking Sheet */}
-            <div className="col-12 col-xl-8 mb-4">
-              <div className="card border-0 shadow-sm rounded-4 overflow-hidden bg-white custom-card">
-                <div className="card-header bg-white border-bottom border-light py-3.5 d-flex justify-content-between align-items-center px-4">
-                  <h5 className="mb-0 fw-bold text-dark font-monospace tracking-tight">LIVE INVENTORY LEDGER</h5>
-                  <button onClick={fetchInventory} className="btn btn-sm btn-outline-dark rounded-pill font-monospace px-3 py-1">
-                    🔄 Refresh Data
-                  </button>
-                </div>
-                <div className="card-body p-0">
-                  <div className="table-responsive">
-                    <table className="table table-hover align-middle mb-0 font-monospace text-nowrap">
-                      <thead className="table-dark text-uppercase fs-7">
-                        <tr>
-                          <th className="px-4 py-3 text-white-50">ID</th>
-                          <th className="py-3 text-white-50">Name</th>
-                          <th className="py-3 text-white-50">Brand</th>
-                          <th className="py-3 text-end text-white-50">Price</th>
-                          <th className="py-3 text-center text-white-50">Current Stock</th>
-                          <th className="px-4 py-3 text-center text-white-50">Quick Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {inventory.map((item) => (
-                          <tr key={item.id} className={item.stock === 0 ? "table-danger bg-opacity-25" : ""}>
-                            <td className="px-4 fw-bold text-muted">#{item.id}</td>
-                            <td className="fw-bold text-dark">{item.name}</td>
-                            <td><span className="badge bg-light text-dark font-monospace border fw-normal px-2 py-1">{item.brand}</span></td>
-                            <td className="text-end fw-bold">${item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                            <td className="text-center">
-                              {item.stock > 0 ? (
-                                <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-1.5 rounded-pill fw-bold">
-                                  {item.stock} available
-                                </span>
-                              ) : (
-                                <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 px-3 py-1.5 rounded-pill fw-bold">
-                                  Sold Out
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-4 text-center">
-                              <div className="btn-group gap-1">
-                                <button onClick={() => handleRestock(item.id, item.name)} className="btn btn-sm btn-warning text-dark px-3 rounded-pill fw-bold shadow-sm transition-all small">
-                                  +10 Restock
-                                </button>
-                                <button onClick={() => handleEditClick(item)} className="btn btn-sm btn-outline-secondary px-3 rounded-pill transition-all small">
-                                  Edit
-                                </button>
-                                <button onClick={() => handleDeleteProduct(item.id, item.name)} className="btn btn-sm btn-outline-danger px-3 rounded-pill transition-all small">
-                                  Delete
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+          <div>
+            {/* Header & Section Action Controls */}
+            <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+              <div>
+                <h2 className="fw-black text-dark font-monospace mb-1">
+                  <span className="text-warning">📦</span> INVENTORY & INTAKE
+                </h2>
+                <p className="text-muted font-monospace small mb-0">
+                  Manage live catalog items, track available stock counts, and handle intake updates.
+                </p>
               </div>
+
+              <button 
+                onClick={fetchInventory} 
+                disabled={systemStatus === 'OFFLINE'}
+                className="btn btn-outline-dark rounded-pill font-monospace small px-3 py-1.5 d-flex align-items-center gap-2 shadow-sm fw-semibold"
+              >
+                <span>🔄</span>
+                <span>Refresh Data</span>
+              </button>
             </div>
 
-            {/* Right Column: Intake Panel */}
-            <div className="col-12 col-xl-4">
-              <div className="card border-0 shadow-sm rounded-4 p-4 bg-white custom-card">
-                <div className="border-bottom border-light pb-3 mb-4">
-                  <h5 className="fw-bold text-dark font-monospace mb-1">
-                    {editingId ? "📝 EDIT CATALOG ITEM" : "📥 ITEM INTAKE PANEL"}
-                  </h5>
-                  <p className="text-muted small mb-0">
-                    {editingId ? `Modifying settings for active product ID #${editingId}.` : "Publish an entirely new model selection to the showroom floor instantly."}
-                  </p>
-                </div>
-
-                {formSuccess && <div className="alert alert-success small py-2 px-3 border-0 rounded-3 mb-3 shadow-sm font-monospace">✅ {formSuccess}</div>}
-                {formError && <div className="alert alert-danger small py-2 px-3 border-0 rounded-3 mb-3 shadow-sm font-monospace">❌ {formError}</div>}
-
-                <form onSubmit={handleCreateProduct}>
-                  <div className="row g-3 font-monospace small">
-                    
-                    <div className="col-12">
-                      <label className="form-label fw-bold text-secondary mb-1">Product Name *</label>
-                      <input type="text" name="name" value={form.name} onChange={handleInputChange} className="form-control form-control-sm border-light-subtle bg-light bg-opacity-25 py-2 px-3 rounded-3" placeholder="e.g. Stratocaster Player" required />
-                    </div>
-
-                    <div className="col-12">
-                      <label className="form-label fw-bold text-secondary mb-1">Brand Name *</label>
-                      <input type="text" name="brand" value={form.brand} onChange={handleInputChange} className="form-control form-control-sm border-light-subtle bg-light bg-opacity-25 py-2 px-3 rounded-3" placeholder="e.g. Fender" required />
-                    </div>
-
-                    <div className="col-md-6">
-                      <label className="form-label fw-bold text-secondary mb-1">Price ($USD) *</label>
-                      <input type="number" step="0.01" min="0" name="price" value={form.price} onChange={handleInputChange} className="form-control form-control-sm border-light-subtle bg-light bg-opacity-25 py-2 px-3 rounded-3" placeholder="0.00" required />
-                    </div>
-
-                    <div className="col-md-6">
-                      <label className="form-label fw-bold text-secondary mb-1">Initial Stock Count *</label>
-                      <input type="number" min="0" name="stock" value={form.stock} onChange={handleInputChange} className="form-control form-control-sm border-light-subtle bg-light bg-opacity-25 py-2 px-3 rounded-3" placeholder="0" required />
-                    </div>
-
-                    <div className="col-12">
-                      <label className="form-label fw-bold text-secondary mb-1">Description</label>
-                      <textarea name="description" rows="2" value={form.description} onChange={handleInputChange} className="form-control form-control-sm border-light-subtle bg-light bg-opacity-25 py-2 px-3 rounded-3" placeholder="Provide product features, tonal reviews, wood choices..."></textarea>
-                    </div>
-
-                    <div className="col-12 mb-2">
-                      <label className="form-label fw-bold text-secondary mb-1">Product Image</label>
-
-                      {/* Unified Preview Container: Fires for NEW local files OR existing server assets */}
-                      {(filePreview || (editingId && form.image_url)) && (
-                        <div className="d-flex align-items-center gap-3 p-2 mb-2 border border-light-subtle bg-light bg-opacity-50 rounded-3">
-                          <img 
-                            src={filePreview || form.image_url} 
-                            alt="Preview" 
-                            className="rounded border bg-white object-fit-contain" 
-                            style={{ width: '50px', height: '50px' }} 
-                          />
-                          <div className="flex-grow-1 min-w-0">
-                            <span className="d-block text-muted small text-truncate font-monospace">
-                              {filePreview ? "✨ Local Draft Selected" : "📦 Saved Database Asset"}
+            <div className="row">
+              {/* Left Column: Master Live Database Tracking Sheet */}
+              <div className="col-12 col-xl-8 mb-4">
+                <div className="table-responsive bg-dark rounded-4 border border-secondary border-opacity-25 shadow-lg">
+                  <table className="table table-dark table-hover align-middle mb-0 font-monospace text-nowrap">
+                    <thead className="text-warning font-monospace small border-bottom border-secondary border-opacity-50">
+                      <tr>
+                        <th className="px-4 py-3">ID</th>
+                        <th className="py-3">NAME</th>
+                        <th className="py-3">BRAND</th>
+                        <th className="py-3 text-end">PRICE</th>
+                        <th className="py-3 text-center">CURRENT STOCK</th>
+                        <th className="px-4 py-3 text-center">QUICK ACTIONS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inventory.map((item) => (
+                        <tr key={item.id}>
+                          <td className="px-4 fw-bold text-warning">#{item.id}</td>
+                          <td className="fw-bold text-white">{item.name}</td>
+                          <td>
+                            <span className="badge bg-secondary bg-opacity-25 text-white border border-secondary border-opacity-25 fw-normal px-2.5 py-1">
+                              {item.brand}
                             </span>
+                          </td>
+                          <td className="text-end fw-bold text-white">
+                            ${item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="text-center">
+                            {item.stock > 0 ? (
+                              <span className="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25 px-3 py-1.5 rounded-pill fw-bold">
+                                {item.stock} available
+                              </span>
+                            ) : (
+                              <span className="badge bg-danger bg-opacity-25 text-danger border border-danger border-opacity-25 px-3 py-1.5 rounded-pill fw-bold">
+                                Sold Out
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 text-center">
+                            <div className="btn-group gap-1">
+                              <button 
+                                onClick={() => handleRestock(item.id, item.name)} 
+                                className="btn btn-sm btn-warning text-dark font-monospace px-3 rounded-pill fw-bold shadow-sm transition-all small"
+                              >
+                                +10 Restock
+                              </button>
+                              <button 
+                                onClick={() => handleEditClick(item)} 
+                                className="btn btn-sm btn-outline-light font-monospace px-3 rounded-pill transition-all small"
+                              >
+                                Edit
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteProduct(item.id, item.name)} 
+                                className="btn btn-sm btn-outline-danger font-monospace px-3 rounded-pill transition-all small"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Right Column: Dark Modern Intake Panel */}
+              <div className="col-12 col-xl-4">
+                <div className="bg-dark text-white rounded-4 border border-secondary border-opacity-25 p-4 shadow-lg font-monospace">
+                  <div className="border-bottom border-secondary border-opacity-25 pb-3 mb-4">
+                    <h5 className="fw-bold text-warning mb-1">
+                      {editingId ? "📝 EDIT CATALOG ITEM" : "📥 ITEM INTAKE PANEL"}
+                    </h5>
+                    <p className="text-white-50 small mb-0">
+                      {editingId ? `Modifying settings for active product ID #${editingId}.` : "Publish an entirely new model selection to the showroom floor instantly."}
+                    </p>
+                  </div>
+
+                  {formSuccess && <div className="alert alert-success small py-2 px-3 border-0 rounded-3 mb-3 shadow-sm font-monospace">✅ {formSuccess}</div>}
+                  {formError && <div className="alert alert-danger small py-2 px-3 border-0 rounded-3 mb-3 shadow-sm font-monospace">❌ {formError}</div>}
+
+                  <form onSubmit={handleCreateProduct}>
+                    <div className="row g-3 small">
+                      
+                      <div className="col-12">
+                        <label className="form-label fw-bold text-warning mb-1">Product Name *</label>
+                        <input 
+                          type="text" 
+                          name="name" 
+                          value={form.name} 
+                          onChange={handleInputChange} 
+                          className="form-control form-control-sm bg-dark text-white border-secondary border-opacity-50 py-2 px-3 rounded-3" 
+                          placeholder="e.g. Stratocaster Player" 
+                          required 
+                        />
+                      </div>
+
+                      <div className="col-12">
+                        <label className="form-label fw-bold text-warning mb-1">Brand Name *</label>
+                        <input 
+                          type="text" 
+                          name="brand" 
+                          value={form.brand} 
+                          onChange={handleInputChange} 
+                          className="form-control form-control-sm bg-dark text-white border-secondary border-opacity-50 py-2 px-3 rounded-3" 
+                          placeholder="e.g. Fender" 
+                          required 
+                        />
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label fw-bold text-warning mb-1">Price ($USD) *</label>
+                        <input 
+                          type="number" 
+                          step="0.01" 
+                          min="0" 
+                          name="price" 
+                          value={form.price} 
+                          onChange={handleInputChange} 
+                          className="form-control form-control-sm bg-dark text-white border-secondary border-opacity-50 py-2 px-3 rounded-3" 
+                          placeholder="0.00" 
+                          required 
+                        />
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label fw-bold text-warning mb-1">Initial Stock Count *</label>
+                        <input 
+                          type="number" 
+                          min="0" 
+                          name="stock" 
+                          value={form.stock} 
+                          onChange={handleInputChange} 
+                          className="form-control form-control-sm bg-dark text-white border-secondary border-opacity-50 py-2 px-3 rounded-3" 
+                          placeholder="0" 
+                          required 
+                        />
+                      </div>
+
+                      <div className="col-12">
+                        <label className="form-label fw-bold text-warning mb-1">Description</label>
+                        <textarea 
+                          name="description" 
+                          rows="2" 
+                          value={form.description} 
+                          onChange={handleInputChange} 
+                          className="form-control form-control-sm bg-dark text-white border-secondary border-opacity-50 py-2 px-3 rounded-3" 
+                          placeholder="Provide product features, tonal reviews, wood choices..."
+                        ></textarea>
+                      </div>
+
+                      <div className="col-12 mb-2">
+                        <label className="form-label fw-bold text-warning mb-1">Product Image</label>
+
+                        {(filePreview || (editingId && form.image_url)) && (
+                          <div className="d-flex align-items-center gap-3 p-2 mb-2 border border-secondary border-opacity-50 bg-secondary bg-opacity-10 rounded-3">
+                            <img 
+                              src={filePreview || form.image_url} 
+                              alt="Preview" 
+                              className="rounded border border-secondary bg-dark object-fit-contain" 
+                              style={{ width: '50px', height: '50px' }} 
+                            />
+                            <div className="flex-grow-1 min-w-0">
+                              <span className="d-block text-white-50 small text-truncate">
+                                {filePreview ? "✨ Local Draft Selected" : "📦 Saved Database Asset"}
+                              </span>
+                            </div>
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                if (filePreview) URL.revokeObjectURL(filePreview);
+                                setFilePreview(null);
+                                setForm(prev => ({ ...prev, file: null, image_url: editingId ? '' : prev.image_url }));
+                                document.getElementById('productImageInput').value = '';
+                              }}
+                              className="btn btn-sm btn-outline-danger font-monospace px-2 py-0.5"
+                              style={{ fontSize: '0.7rem' }}
+                            >
+                              Remove
+                            </button>
                           </div>
+                        )}
+
+                        <input
+                          id="productImageInput" 
+                          type="file" 
+                          accept="image/*"
+                          onChange={handleFileChange} 
+                          className="form-control form-control-sm bg-dark text-white border-secondary border-opacity-50 py-2 px-3 rounded-3" 
+                        />
+                      </div>
+
+                      <div className="col-12 pt-2 d-flex gap-2">
+                        {editingId && (
                           <button 
                             type="button" 
-                            onClick={() => {
-                              if (filePreview) URL.revokeObjectURL(filePreview);
-                              setFilePreview(null);
-                              setForm(prev => ({ ...prev, file: null, image_url: editingId ? '' : prev.image_url }));
-                              document.getElementById('productImageInput').value = '';
-                            }}
-                            className="btn btn-sm btn-outline-danger font-monospace px-2 py-0.5"
-                            style={{ fontSize: '0.7rem' }}
+                            onClick={handleCancelEdit} 
+                            className="btn btn-outline-light fw-bold w-50 py-2.5 rounded-pill shadow-sm text-uppercase tracking-wider"
                           >
-                            Remove
+                            Cancel
                           </button>
-                        </div>
-                      )}
-
-                      <input
-                        id="productImageInput" 
-                        type="file" 
-                        accept="image/*"
-                        onChange={handleFileChange} 
-                        className="form-control form-control-sm border-light-subtle bg-light bg-opacity-25 py-2 px-3 rounded-3" 
-                      />
-                    </div>
-
-                    <div className="col-12 pt-2 d-flex gap-2">
-                      {editingId && (
-                        <button type="button" onClick={handleCancelEdit} className="btn btn-outline-secondary fw-bold w-50 py-2.5 rounded-pill shadow-sm text-uppercase tracking-wider">
-                          Cancel
+                        )}
+                        <button 
+                          type="submit" 
+                          className={`btn ${editingId ? 'btn-success' : 'btn-warning'} text-dark fw-bold ${editingId ? 'w-50' : 'w-100'} py-2.5 rounded-pill shadow-sm transition-all text-uppercase tracking-wider`}
+                        >
+                          {editingId ? "Save Changes" : "Publish To Floor 🚀"}
                         </button>
-                      )}
-                      <button type="submit" className={`btn ${editingId ? 'btn-success' : 'btn-dark'} text-white fw-bold ${editingId ? 'w-50' : 'w-100'} py-2.5 rounded-pill shadow-sm transition-all text-uppercase tracking-wider`}>
-                        {editingId ? "Save Changes" : "Publish To Floor 🚀"}
-                      </button>
-                    </div>
+                      </div>
 
-                  </div>
-                </form>
+                    </div>
+                  </form>
+                </div>
               </div>
             </div>
           </div>
