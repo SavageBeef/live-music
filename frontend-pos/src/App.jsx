@@ -59,7 +59,14 @@ function App() {
 
   // Restock Function: Sends a restock increment request to the backend server
   const handleRestock = (id, itemName) => {
-    const restockAmount = 10; // Default intake standard batch count
+    const input = window.prompt(`Enter restock quantity for "${itemName}":`, "10");
+    if (input === null) return; // User cancelled prompt
+
+    const restockAmount = parseInt(input, 10);
+    if (isNaN(restockAmount) || restockAmount <= 0) {
+      alert("❌ Invalid quantity. Please enter a positive number.");
+      return;
+    }
 
     fetch('http://localhost:5000/api/pos/restock', {
       method: 'POST',
@@ -352,7 +359,7 @@ function App() {
                                 onClick={() => handleRestock(item.id, item.name)} 
                                 className="btn btn-sm btn-warning text-dark font-monospace px-3 rounded-pill fw-bold shadow-sm transition-all small"
                               >
-                                +10 Restock
+                                + Restock
                               </button>
                               <button 
                                 onClick={() => handleEditClick(item)} 

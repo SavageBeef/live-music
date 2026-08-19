@@ -187,11 +187,11 @@ app.get('/api/sales', (req, res) => {
     });
 })
 
-// Restock Endpoint: Increases the stock of a product in the database (UPDATE Operation)
+// Restock Route Handler: Increases the stock of a product in the database (UPDATE Operation)
 app.post('/api/pos/restock', (req, res) => {
   const { id, quantity } = req.body;
   if (!id || !quantity || quantity <= 0) {
-    return res.status(400).json({ error: "Valid product ID and increment quantity are required." });
+    return res.status(400).json({ error: "Invalid product ID or restock quantity." });
   }
 
   // Find the current stock first, then increment it
