@@ -27,6 +27,10 @@ function App() {
 
   const [activeView, setActiveView] = useState('inventory'); // 'inventory' | 'sales'
 
+  // Restock Modal State Control
+  const [restockItem, setRestockItem] = useState(null); // stores { id, name, stock } when active
+  const [restockQuantity, setRestockQuantity] = useState(10);
+
   // Fetch the full catalog including out-of-stock items
   const fetchInventory = () => {
     fetch('http://localhost:5000/api/products')
@@ -57,21 +61,33 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Restock Function: Sends a restock increment request to the backend server
-  const handleRestock = (id, itemName) => {
-    const input = window.prompt(`Enter restock quantity for "${itemName}":`, "10");
-    if (input === null) return; // User cancelled prompt
+  // Open modal with selected item context
+  const handleOpenRestockModal = (item) => {
+    setRestockItem(item);
+    setRestockQuantity(10); // default default batch
+  };
 
-    const restockAmount = parseInt(input, 10);
+  // Close modal & reset state
+  const handleCloseRestockModal = () => {
+    setRestockItem(null);
+    setRestockQuantity(10);
+  };
+
+  // Restock Function: Sends a restock increment request to the backend server
+  const handleConfirmRestock = (e) => {
+    e.preventDefault();
+    const restockAmount = parseInt(restockQuantity, 10);
     if (isNaN(restockAmount) || restockAmount <= 0) {
       alert("❌ Invalid quantity. Please enter a positive number.");
       return;
     }
+    
+    handleCloseRestockModal();
 
     fetch('http://localhost:5000/api/pos/restock', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: id, quantity: restockAmount })
+      body: JSON.stringify({ id: restockItem.id, quantity: restockAmount })
     })
       .then(res => {
         if (!res.ok) throw new Error("Failed to process server restock.");
@@ -82,7 +98,7 @@ function App() {
         fetchInventory();
       })
       .catch(err => {
-        alert(`❌ Error restocking ${itemName}: ${err.message}`);
+        alert(`❌ Error restocking ${restockItem.name}: ${err.message}`);
       });
   };
 
@@ -356,7 +372,7 @@ function App() {
                           <td className="px-4 text-center">
                             <div className="btn-group gap-1">
                               <button 
-                                onClick={() => handleRestock(item.id, item.name)} 
+                                onClick={() => handleOpenRestockModal(item)} 
                                 className="btn btn-sm btn-warning text-dark font-monospace px-3 rounded-pill fw-bold shadow-sm transition-all small"
                               >
                                 + Restock
@@ -538,6 +554,101 @@ function App() {
         )}
 
       </div>
+
+      {/* Restock Inventory Modal */}
+      {restockItem && (() => {
+        const addedQty = parseInt(restockQuantity, 10) || 0;
+        const projectedTotal = restockItem.stock + addedQty;
+
+        return (
+          <div 
+            className="modal fade show d-block" 
+            tabIndex="-1" 
+            style={{ backgroundColor: 'rgba(0,0,0,0.75)' }}
+            onClick={handleCloseRestockModal}
+          >
+            <div 
+              className="modal-dialog modal-dialog-centered font-monospace"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="modal-content bg-dark text-white border border-secondary border-opacity-50 shadow-lg rounded-4">
+                <div className="modal-header border-secondary border-opacity-25 py-3">
+                  <h5 className="modal-title fw-bold text-warning d-flex align-items-center gap-2 mb-0">
+                    <span>📦</span> RESTOCK INVENTORY
+                  </h5>
+                  <button 
+                    type="button" 
+                    className="btn-close btn-close-white" 
+                    onClick={handleCloseRestockModal}
+                    aria-label="Close"
+                  ></button>
+                </div>
+
+                <form onSubmit={handleConfirmRestock}>
+                  <div className="modal-body py-4">
+                    <div className="mb-3">
+                      <span className="text-white-50 small d-block">Target Item:</span>
+                      <span className="fs-5 fw-bold text-white">#{restockItem.id} - {restockItem.name}</span>
+                    </div>
+
+                    {/* Quantity Input Field */}
+                    <div className="mb-4">
+                      <label className="form-label fw-bold text-warning small mb-1">
+                        Quantity to Add *
+                      </label>
+                      <input 
+                        type="number" 
+                        min="1" 
+                        value={restockQuantity} 
+                        onChange={(e) => setRestockQuantity(e.target.value)} 
+                        className="form-control bg-dark text-white border-secondary border-opacity-50 py-2 px-3 rounded-3 fs-5 fw-bold" 
+                        required 
+                        autoFocus
+                      />
+                    </div>
+
+                    {/* Dynamic Live Calculations Card */}
+                    <div className="p-3 bg-secondary bg-opacity-10 border border-secondary border-opacity-25 rounded-3">
+                      <div className="d-flex justify-content-between align-items-center mb-2 small">
+                        <span className="text-white-50">Current Stock:</span>
+                        <span className="fw-bold text-white">{restockItem.stock} units</span>
+                      </div>
+                      <div className="d-flex justify-content-between align-items-center mb-2 small">
+                        <span className="text-white-50">Adding Quantity:</span>
+                        <span className="fw-bold text-warning">+{addedQty} units</span>
+                      </div>
+                      <hr className="my-2 border-secondary border-opacity-25" />
+                      <div className="d-flex justify-content-between align-items-center">
+                        <span className="text-white-50 small fw-bold">Projected New Total:</span>
+                        <span className="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50 px-2.5 py-1.5 fw-bold fs-6">
+                          {projectedTotal} units
+                        </span>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  <div className="modal-footer border-secondary border-opacity-25 py-3">
+                    <button 
+                      type="button" 
+                      onClick={handleCloseRestockModal} 
+                      className="btn btn-outline-light rounded-pill px-4 fw-semibold small"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit" 
+                      className="btn btn-warning text-dark rounded-pill px-4 fw-bold shadow-sm small text-uppercase"
+                    >
+                      Confirm Restock 🚀
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
