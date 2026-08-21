@@ -3,6 +3,7 @@ import Navbar from './components/Navbar';
 import SalesHistory from './components/SalesHistory';
 import RestockModal from './components/RestockModal';
 import InventoryTable from './components/InventoryTable';
+import ProductForm from './components/ProductForm';
 
 function App() {
   const [inventory, setInventory] = useState([]);
@@ -12,21 +13,8 @@ function App() {
   const [systemStatus, setSystemStatus] = useState('OFFLINE');
   const [hasConnected, setHasConnected] = useState(false);
 
-  // Form State Control Object (Tracks back-office intake values)
-  const [form, setForm] = useState({
-    name: '',
-    brand: '',
-    price: '',
-    stock: '',
-    description: '',
-    image_url: ''
-  });
-
-  const [formSuccess, setFormSuccess] = useState(null);
-  const [formError, setFormError] = useState(null);
-
-  const [editingId, setEditingId] = useState(null);
-  const [filePreview, setFilePreview] = useState(null);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [notification, setNotification] = useState({type: null, message: ''}); // { type: 'success' / 'error', message: string }
 
   const [activeView, setActiveView] = useState('inventory'); // 'inventory' | 'sales'
 
@@ -105,126 +93,9 @@ function App() {
       });
   };
 
-  // Handles file selection and generates a local browser preview URL
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setForm(prev => ({ ...prev, file }));
-      // Generate a temporary local URL for immediate rendering
-      setFilePreview(URL.createObjectURL(file));
-    } else {
-      setForm(prev => ({ ...prev, file: null }));
-      setFilePreview(null);
-    }
-  };
-
-  // Updates specific controlled input state objects dynamically
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
-  };
-
-  // Dispatches form submission payloads down to our new API route
-  const handleCreateProduct = async (e) => {
-    e.preventDefault();
-    setFormError(null);
-    setFormSuccess(null);
-
-    let finalImageUrl = form.image_url;
-
-    // If a file exists, upload it to the backend first
-    if (form.file) {
-      const formData = new FormData();
-      formData.append('image', form.file);
-
-      const uploadRes = await fetch('http://localhost:5000/api/upload', {
-        method: 'POST',
-        body: formData
-      });
-
-      const uploadData = await uploadRes.json();
-      if (!uploadRes.ok) {
-        setFormError(uploadData.error || "Failed to upload image.");
-        return;
-      }
-      finalImageUrl = uploadData.imageUrl;
-    }
-
-    // Prepare payload (using finalImageUrl instead of direct form input)
-    const payload = { ...form, image_url: finalImageUrl };
-    delete payload.file; // Remove file object from JSON payload
-
-    console.log("🚀 FRONTEND SENDING PAYLOAD:", payload);
-
-    // Dynamic URL and method selection based on whether we're editing or creating a new product
-    const url = editingId
-      ? `http://localhost:5000/api/pos/update-product/${editingId}`
-      : 'http://localhost:5000/api/pos/add-product';
-    const method = editingId ? 'PUT' : 'POST';
-
-    fetch(url, {
-      method: method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to process product submission.");
-        return data;
-      })
-      .then((data) => {
-        if (editingId) {
-          setFormSuccess(`Product changes saved successfully!`);
-          setEditingId(null); // Reset editing state after successful update
-        } else {
-          setFormSuccess(`Product "${form.name}" added successfully with ID #${data.product}.`);
-        }
-
-        // Clear the form after successful submission for next product record
-        setForm({ name: '', brand: '', price: '', stock: '', description: '', image_url: '' });
-        document.getElementById('productImageInput').value = ''; // <-- Clear the file input element cleanly!
-
-        if (filePreview) URL.revokeObjectURL(filePreview); // Free browser memory
-        setFilePreview(null);
-
-        // Refresh the inventory to include the newly added/updated product
-        fetchInventory();
-      })
-      .catch((error) => {
-        setFormError(`❌ ${error.message}`);
-      });
-  };
-
   // Trigger the intake form to pre-fill with the selected product's data for editing
   const handleEditClick = (item) => {
-    setFormError(null);
-    setFormSuccess(null);
-    setEditingId(item.id);
-    setForm({
-      name: item.name,
-      brand: item.brand,
-      price: item.price,
-      stock: item.stock,
-      description: item.description || '',
-      image_url: item.image_url || ''
-    });
-
-    // Clear any unsubmitted new file selections when entering edit mode
-    if (filePreview) URL.revokeObjectURL(filePreview);
-    setFilePreview(null);
-    const fileInput = document.getElementById('productImageInput');
-    if (fileInput) fileInput.value = '';
-  };
-
-  // Cancel the edit operation and reset the form to its default state
-  const handleCancelEdit = () => {
-    setEditingId(null);
-    setForm({ name: '', brand: '', price: '', stock: '', description: '', image_url: '' });
-    setFormError(null);
-    setFormSuccess(null);
-
-    if (filePreview) URL.revokeObjectURL(filePreview); // Free browser memory
-    setFilePreview(null);
+    setEditingProduct(item);
   };
 
   // Dispatch a server-side DELETE mutation sequence
@@ -242,12 +113,18 @@ function App() {
         return data;
       })
       .then(() => {
-        setFormSuccess(`Product "${itemName}" has been successfully deleted from the catalog.`);
-        if (editingId === id) handleCancelEdit(); // Reset form if the deleted product was being edited
+        setNotification({ 
+          type: 'success', 
+          message: `Product "${itemName}" has been successfully deleted from the catalog.`
+        });
+        if (editingProduct?.id === id) setEditingProduct(null); // Reset form if the deleted product was being edited
         fetchInventory();
       })
       .catch((error) => {
-        setFormError(`❌ Deletion Error: ${error.message}`);
+        setNotification({ 
+          type: 'error', 
+          message: `Deletion Error: ${error.message}`
+        });
       });
   };
 
@@ -315,151 +192,15 @@ function App() {
 
               {/* Right Column: Dark Modern Intake Panel */}
               <div className="col-12 col-xl-4">
-                <div className="bg-dark text-white rounded-4 border border-secondary border-opacity-25 p-4 shadow-lg font-monospace">
-                  <div className="border-bottom border-secondary border-opacity-25 pb-3 mb-4">
-                    <h5 className="fw-bold text-warning mb-1">
-                      {editingId ? "📝 EDIT CATALOG ITEM" : "📥 ITEM INTAKE PANEL"}
-                    </h5>
-                    <p className="text-white-50 small mb-0">
-                      {editingId ? `Modifying settings for active product ID #${editingId}.` : "Publish an entirely new model selection to the showroom floor instantly."}
-                    </p>
-                  </div>
-
-                  {formSuccess && <div className="alert alert-success small py-2 px-3 border-0 rounded-3 mb-3 shadow-sm font-monospace">✅ {formSuccess}</div>}
-                  {formError && <div className="alert alert-danger small py-2 px-3 border-0 rounded-3 mb-3 shadow-sm font-monospace">❌ {formError}</div>}
-
-                  <form onSubmit={handleCreateProduct}>
-                    <div className="row g-3 small">
-                      
-                      <div className="col-12">
-                        <label className="form-label fw-bold text-warning mb-1">Product Name *</label>
-                        <input 
-                          type="text" 
-                          name="name" 
-                          value={form.name} 
-                          onChange={handleInputChange} 
-                          className="form-control form-control-sm bg-dark text-white border-secondary border-opacity-50 py-2 px-3 rounded-3" 
-                          placeholder="e.g. Stratocaster Player" 
-                          required 
-                        />
-                      </div>
-
-                      <div className="col-12">
-                        <label className="form-label fw-bold text-warning mb-1">Brand Name *</label>
-                        <input 
-                          type="text" 
-                          name="brand" 
-                          value={form.brand} 
-                          onChange={handleInputChange} 
-                          className="form-control form-control-sm bg-dark text-white border-secondary border-opacity-50 py-2 px-3 rounded-3" 
-                          placeholder="e.g. Fender" 
-                          required 
-                        />
-                      </div>
-
-                      <div className="col-md-6">
-                        <label className="form-label fw-bold text-warning mb-1">Price ($USD) *</label>
-                        <input 
-                          type="number" 
-                          step="0.01" 
-                          min="0" 
-                          name="price" 
-                          value={form.price} 
-                          onChange={handleInputChange} 
-                          className="form-control form-control-sm bg-dark text-white border-secondary border-opacity-50 py-2 px-3 rounded-3" 
-                          placeholder="0.00" 
-                          required 
-                        />
-                      </div>
-
-                      <div className="col-md-6">
-                        <label className="form-label fw-bold text-warning mb-1">Initial Stock Count *</label>
-                        <input 
-                          type="number" 
-                          min="0" 
-                          name="stock" 
-                          value={form.stock} 
-                          onChange={handleInputChange} 
-                          className="form-control form-control-sm bg-dark text-white border-secondary border-opacity-50 py-2 px-3 rounded-3" 
-                          placeholder="0" 
-                          required 
-                        />
-                      </div>
-
-                      <div className="col-12">
-                        <label className="form-label fw-bold text-warning mb-1">Description</label>
-                        <textarea 
-                          name="description" 
-                          rows="2" 
-                          value={form.description} 
-                          onChange={handleInputChange} 
-                          className="form-control form-control-sm bg-dark text-white border-secondary border-opacity-50 py-2 px-3 rounded-3" 
-                          placeholder="Provide product features, tonal reviews, wood choices..."
-                        ></textarea>
-                      </div>
-
-                      <div className="col-12 mb-2">
-                        <label className="form-label fw-bold text-warning mb-1">Product Image</label>
-
-                        {(filePreview || (editingId && form.image_url)) && (
-                          <div className="d-flex align-items-center gap-3 p-2 mb-2 border border-secondary border-opacity-50 bg-secondary bg-opacity-10 rounded-3">
-                            <img 
-                              src={filePreview || form.image_url} 
-                              alt="Preview" 
-                              className="rounded border border-secondary bg-dark object-fit-contain" 
-                              style={{ width: '50px', height: '50px' }} 
-                            />
-                            <div className="flex-grow-1 min-w-0">
-                              <span className="d-block text-white-50 small text-truncate">
-                                {filePreview ? "✨ Local Draft Selected" : "📦 Saved Database Asset"}
-                              </span>
-                            </div>
-                            <button 
-                              type="button" 
-                              onClick={() => {
-                                if (filePreview) URL.revokeObjectURL(filePreview);
-                                setFilePreview(null);
-                                setForm(prev => ({ ...prev, file: null, image_url: editingId ? '' : prev.image_url }));
-                                document.getElementById('productImageInput').value = '';
-                              }}
-                              className="btn btn-sm btn-outline-danger font-monospace px-2 py-0.5"
-                              style={{ fontSize: '0.7rem' }}
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        )}
-
-                        <input
-                          id="productImageInput" 
-                          type="file" 
-                          accept="image/*"
-                          onChange={handleFileChange} 
-                          className="form-control form-control-sm bg-dark text-white border-secondary border-opacity-50 py-2 px-3 rounded-3" 
-                        />
-                      </div>
-
-                      <div className="col-12 pt-2 d-flex gap-2">
-                        {editingId && (
-                          <button 
-                            type="button" 
-                            onClick={handleCancelEdit} 
-                            className="btn btn-outline-light fw-bold w-50 py-2.5 rounded-pill shadow-sm text-uppercase tracking-wider"
-                          >
-                            Cancel
-                          </button>
-                        )}
-                        <button 
-                          type="submit" 
-                          className={`btn ${editingId ? 'btn-success' : 'btn-warning'} text-dark fw-bold ${editingId ? 'w-50' : 'w-100'} py-2.5 rounded-pill shadow-sm transition-all text-uppercase tracking-wider`}
-                        >
-                          {editingId ? "Save Changes" : "Publish To Floor 🚀"}
-                        </button>
-                      </div>
-
-                    </div>
-                  </form>
-                </div>
+                <ProductForm 
+                  editingProduct={editingProduct} 
+                  externalNotification={notification}
+                  onCancelEdit={() => setEditingProduct(null)} 
+                  onProductSaved={() => {
+                    setEditingProduct(null);
+                    fetchInventory();
+                  }} 
+                />
               </div>
             </div>
           </div>
