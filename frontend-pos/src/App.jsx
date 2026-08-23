@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import Navbar from './components/Navbar';
+import Navbar from '@shared/components/Navbar';
 import SalesHistory from './components/SalesHistory';
 import RestockModal from './components/RestockModal';
 import InventoryTable from './components/InventoryTable';
@@ -139,6 +139,7 @@ function App() {
   return (
     <div className="min-vh-100 pb-5" style={{ backgroundColor: '#faf6ee' }}>
       <Navbar 
+        activeApp="pos"
         activeView={activeView} 
         setActiveView={setActiveView} 
         systemStatus={systemStatus} 
@@ -146,7 +147,7 @@ function App() {
 
       <div className="container-fluid px-4">
         {error && (
-          <div className="alert alert-danger shadow-sm border-start border-4 border-danger d-flex align-items-center justify-content-between mb-4" role="alert">
+          <div className="alert alert-danger shadow-sm border-start border-4 border-danger d-flex align-items-center justify-content-between mb-4 mt-4" role="alert">
             <div>
               <strong>⚠️ {hasConnected ? 'Connection Lost:' : 'Server Unavailable:'}</strong> {error}
             </div>
@@ -159,7 +160,7 @@ function App() {
         {activeView === 'inventory' ? (
           <div>
             {/* Header & Section Action Controls */}
-            <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+            <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 mt-4">
               <div>
                 <h2 className="fw-black text-dark font-monospace mb-1">
                   <span className="text-warning">📦</span> INVENTORY & INTAKE

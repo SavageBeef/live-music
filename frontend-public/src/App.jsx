@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import Navbar from '@shared/components/Navbar';
 import ProductCard from './components/ProductCard';
 import heroBgImage from './assets/katarina-bubenikova-nUd7uq3i0qs-unsplash.jpg'; // Import your local asset safely via Vite
 
@@ -244,37 +245,11 @@ function App() {
         </div>
       )}
       {/* Premium Navbar */}
-      <nav className="navbar navbar-expand-lg navbar-dark bg-dark py-3 border-bottom border-secondary border-opacity-25 shadow-sm">
-        <div className="container-fluid px-4">
-
-          <a className="navbar-brand fw-black tracking-wider d-flex align-items-center mb-0" href="#">
-            <span className="text-warning me-2">⚡</span> LIVE MUSIC
-          </a>
-          {/* Mobile Toggle Button */}
-          <button className="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-            <span className="navbar-toggler-icon"></span>
-          </button>
-          <div className="collapse navbar-collapse justify-content-end" id="navbarNav">
-            {/* Flex container grouping text links and badge together with spacing handles */}
-            <div className="d-flex flex-column flex-lg-row align-items-start align-items-lg-center gap-3 mt-3 mt-lg-0">
-              {/* Monospaced Navigation Links */}
-              <div className="navbar-nav flex-row font-monospace small me-lg-2">
-                <a className="nav-link active px-3 text-warning mb-0" href="#">Showroom</a>
-                <a className="nav-link px-3 mb-0 text-white-50" href="#">POS Backend</a>
-              </div>
-              {/* Clickable Cart Button */}
-              <button 
-                onClick={() => setIsCartOpen(true)}
-                className={`btn font-monospace px-3 py-2 rounded-pill shadow-sm d-flex align-items-center justify-content-center fw-bold border-0 ${
-                  isOffline ? 'btn-secondary text-white' : 'btn-warning text-dark'
-                }`}
-              >
-                🛒 Cart <span className="badge bg-dark text-warning ms-2 rounded-pill">{totalCartCount}</span>
-              </button> 
-            </div>
-          </div>
-        </div>
-      </nav>
+      <Navbar 
+        activeApp="public" 
+        cartCount={totalCartCount} 
+        onOpenCart={() => setIsCartOpen(true)} 
+      />
 
       {/* Hero Section Banner with Brand Gradient Overlay */}
       <header className="text-light py-5 mb-5 shadow" style={heroStyle}>
