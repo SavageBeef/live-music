@@ -36,6 +36,8 @@ h1 {
 .tracking-wider { letter-spacing: 0.1em; }
 .tracking-tight { letter-spacing: -0.03em; }
 
+/* FRONTEND-PUBLIC */
+
 /* Micro-interactions for cards */
 .custom-card {
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease !important;
@@ -67,4 +69,22 @@ h1 {
 .btn-warning:hover {
   background-color: #e0a800 !important;
   transform: scale(1.02);
+}
+
+/* FRONTEND-POS */
+
+/* Custom interactive button color blending */
+.btn-warning {
+  background-color: #ffc107 !important;
+  border: none !important;
+}
+.btn-warning:hover {
+  background-color: #e0a800 !important;
+  transform: scale(1.02);
+}
+
+/* Utility for micro font rendering inside table sheets */
+.fs-7 {
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
 }
