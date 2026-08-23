@@ -33,7 +33,21 @@ Because physical instrument finishes (flamed maple tops, burst polishes, lacquer
 *   **Aspect Ratio Preservation:** Images must use `object-fit-contain` layout classes within bounded containers.
 *   **No Aggressive Clipping:** Never stretch or crop instrument bodies unevenly. Let the warm white backgrounds naturally padding-pad asymmetrical shapes (like bass guitars or odd-shaped FX pedals).
 
-### 3. Contextual Typography
-The font design maps directly to system environments:
-*   **Showroom Viewports (`frontend-public`):** Employs expressive, tracking-wider headings to build high-end consumer appeal.
-*   **Ledger & Admin Viewports (`frontend-pos`):** Locks tabular data and intake fields to clean monospace font styles (`font-monospace`) to mirror authentic, high-precision inventory tracking grids.
+---
+
+## 🔤 Typography & Font Hierarchy
+
+The UI ecosystem follows a strict **Two-Font Hierarchy** to balance modern consumer branding with high-density administrative utility.
+
+### 1. Font Classification & Roles
+
+| Font Class | CSS Class / Stack | Primary Usage | Visual Intent |
+| :--- | :--- | :--- | :--- |
+| **Primary Sans-Serif** | Default System UI (`sans-serif`) | Brand titles, hero headings, product card names, section labels, and body prose. | Delivers a clean, warm, high-readability consumer experience. |
+| **Accent Monospace** | `font-monospace` | Prices, stock counts, SKUs, inventory tables, sales ledgers, status badges, and action buttons. | Creates a precise, technical feel reminiscent of audio spec sheets and transaction terminals. |
+
+### 2. Contextual Application Rules
+
+* **Public Showroom (`frontend-public`)**: Primarily uses sans-serif typography with wide letter-spacing (`fw-black tracking-wider`) for hero headers and product titles. Monospace is reserved for prices, stock status pills, and cart counts.
+* **POS Back-Office (`frontend-pos`)**: Heavily utilizes `font-monospace` across inventory tables, form fields, and sales history grids to function as an authentic, high-precision inventory tracking terminal.
+* **Shared Components (`Navbar`)**: Ensures uniform brand font styling (`fw-black tracking-wider`) and link sizing (`.nav-link`) across both applications, with monospace applied strictly to utility controls (Cart button, system status badges).
