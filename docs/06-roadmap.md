@@ -24,6 +24,16 @@ This document tracks the architectural phases, active sprints, and future engine
                ▼
 ┌──────────────────────────────┐
 │  Phase 4: Core POS Features  │ ──► Transaction Ledger & Checkout Flow (Planned)
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│  Phase 5: Catalog & Search   │ ──► Taxonomy, SKUs & Filtering (CURRENT TASK)
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│  Phase 6: Auth & Security    │ ──► JWT & Role-Based Access Control (Planned)
 └──────────────────────────────┘
 ```
 
@@ -65,15 +75,24 @@ This document tracks the architectural phases, active sprints, and future engine
 ## 🔴 Phase 4: Core POS Features & Transaction Ledger
 *Goal: Expand backend business logic to handle actual checkout workflows, cart persistence, and sales analytics.*
 
-*   [ ] Design a relational `sales` or `transactions` ledger database schema table.
-*   [ ] Build transaction-safe checkout controllers that decrement structural item stock numbers atomically when a purchase request is fired.
-*   [ ] Build shopping cart management state in `frontend-public`.
-*   [ ] Add historical receipt viewports and basic revenue data cards to the staff `frontend-pos` dashboard.
-*   [ ] Implement lightweight input validations on stock changes to prevent accidental human entry errors.
+*   [x] Design a relational `sales` or `transactions` ledger database schema table.
+*   [x] Build transaction-safe checkout controllers that decrement structural item stock numbers atomically when a purchase request is fired.
+*   [x] Build shopping cart management state in `frontend-public`.
+*   [x] Add historical receipt viewports and basic revenue data cards to the staff `frontend-pos` dashboard.
+*   [x] Implement lightweight input validations on stock changes to prevent accidental human entry errors.
 
 ---
 
-## 🔴 Phase 5: Authentication & Access Control
+## 🔴 Phase 5: Catalog Taxonomy, SKUs & Filtering
+*Goal: Expand product schemas with structured categorization, unique SKU identifiers, and interactive search/sort capabilities.*
+
+*   [ ] Expand product data schema to support multi-level hierarchical categorization (e.g., `Guitars / Electric / Squier`, `Guitars / Bass / M7`, `Pedals / Bass / Tech 21`).
+*   [ ] Add SKU (Stock Keeping Unit) generation and management across database and UI viewports.
+*   [ ] Implement client-side and backend filtering (by category, brand, availability) and sorting options (price, name, date added).
+
+---
+
+## 🔴 Phase 6: Authentication & Access Control
 *Goal: Secure back-office operations and customer profile management.*
 
 *   [ ] Implement JWT / session-based staff authentication for `frontend-pos`.
